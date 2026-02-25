@@ -69,6 +69,12 @@ export interface RaceResult {
   standard_total_sec?: number | null;
   position: number | null;
   status: string;
+  strength_rank?: number | null;
+  pred_swim_sec?: number | null;
+  pred_t1_sec?: number | null;
+  pred_bike_sec?: number | null;
+  pred_t2_sec?: number | null;
+  pred_run_sec?: number | null;
 }
 
 export interface DifficultySegments {
@@ -160,4 +166,18 @@ export function formatTime(sec: number | null | undefined): string {
     return `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
   return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** 差分秒数を ±mm:ss 形式に（正=遅い, 負=速い） */
+export function formatDiff(sec: number | null | undefined): string {
+  if (sec == null) return '--';
+  const sign = sec >= 0 ? '+' : '-';
+  const abs = Math.abs(sec);
+  const m = Math.floor(abs / 60);
+  const s = Math.floor(abs % 60);
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    return `${sign}${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  return `${sign}${m}:${String(s).padStart(2, '0')}`;
 }

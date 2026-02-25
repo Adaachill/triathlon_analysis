@@ -363,3 +363,40 @@
   color: var(--text-muted);
   font-size: 0.8rem;
 }
+
+/* セグメント比較テーブル（RaceDetail 展開行内） */
+.seg-compare-table {
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 320px;
+}
+
+.seg-compare-table th,
+.seg-compare-table td {
+  padding: 0.3rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.seg-compare-table th {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.seg-compare-table .seg-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  width: 3.5rem;
+}
+
+.diff-fast {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.diff-slow {
+  color: #f87171;
+  font-weight: 600;
+}

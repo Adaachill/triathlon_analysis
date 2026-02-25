@@ -10,6 +10,7 @@ from app.services.difficulty import (
     compute_race_difficulty,
     compute_race_difficulty_segments,
     get_standard_total_sec,
+    compute_athlete_strength_full,
 )
 
 router = APIRouter(prefix="/races", tags=["races"])
@@ -60,11 +61,31 @@ async def get_race(
     # 難易度を計算（program_name指定時のみ）
     difficulty = None
     difficulty_segments = None
+    athlete_strength_cache: dict[str, Optional[dict]] = {}
+    strength_rank_map: dict[str, int] = {}
+
     if program_name:
         difficulty = compute_race_difficulty(session, race_id, program_name)
         difficulty_segments = compute_race_difficulty_segments(session, race_id, program_name)
 
-    # 結果に標準化タイムを追加
+        # 完走選手の強さ指標を取得して strength_rank を計算
+        finished = [r for r in results if r.status == "Finished" and r.total_sec is not None]
+        athletes_with_strength: list[tuple[str, float]] = []
+        for r in finished:
+            if r.athlete_id not in athlete_strength_cache:
+                athlete_strength_cache[r.athlete_id] = compute_athlete_strength_full(
+                    session, r.athlete_id, program_name
+                )
+            s = athlete_strength_cache[r.athlete_id]
+            if s and s.get("strength") is not None:
+                athletes_with_strength.append((r.athlete_id, s["strength"]))
+
+        athletes_sorted = sorted(athletes_with_strength, key=lambda x: x[1])
+        strength_rank_map = {aid: i + 1 for i, (aid, _) in enumerate(athletes_sorted)}
+
+    _SEGS = ["swim", "t1", "bike", "t2", "run"]
+
+    # 結果に標準化タイム・strength_rank・予想タイムを追加
     result_list = []
     for r in results:
         result_dict = {
@@ -81,11 +102,21 @@ async def get_race(
             "total_sec": r.total_sec,
             "position": r.position,
             "status": r.status,
+            "strength_rank": strength_rank_map.get(r.athlete_id),
         }
         if difficulty is not None and r.total_sec is not None:
             result_dict["standard_total_sec"] = get_standard_total_sec(
                 r.total_sec, difficulty
             )
+        # 予想セグメントタイム = 選手のstrength_segment + レースのsegment難易度
+        if difficulty_segments is not None:
+            s_data = athlete_strength_cache.get(r.athlete_id)
+            for seg in _SEGS:
+                strength_val = s_data.get(f"strength_{seg}") if s_data else None
+                diff_val = difficulty_segments.get(f"{seg}_sec", 0.0)
+                result_dict[f"pred_{seg}_sec"] = (
+                    float(strength_val + diff_val) if strength_val is not None else None
+                )
         result_list.append(result_dict)
 
     return {
