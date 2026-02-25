@@ -8,6 +8,7 @@ env/
 venv/
 ENV/
 .venv
+.venv311
 
 # Database
 *.db
@@ -20,7 +21,7 @@ ENV/
 *.swp
 *.swo
 # clause
-.claude
+.claude/
 
 # OS
 .DS_Store

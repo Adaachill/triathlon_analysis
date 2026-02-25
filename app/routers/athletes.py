@@ -1,4 +1,5 @@
 """選手関連API"""
+from typing import Optional
 from fastapi import APIRouter, Query, Depends
 from sqlmodel import Session, select
 from app.deps import get_db
@@ -43,6 +44,8 @@ async def get_athlete(
 
     # レースごとの詳細を取得
     difficulty_cache: dict[int, float] = {}
+    all_race_athletes_cache: dict[int, list] = {}
+    athlete_strength_cache: dict[str, Optional[float]] = {}
     race_details = []
 
     for r in results:
@@ -60,6 +63,33 @@ async def get_athlete(
         difficulty = difficulty_cache[r.race_id]
         standard_total = get_standard_total_sec(r.total_sec, difficulty)
 
+        # 同レースの全選手を取得してstrength順位を計算
+        if r.race_id not in all_race_athletes_cache:
+            all_race_athletes_cache[r.race_id] = session.exec(
+                select(Result).where(
+                    Result.race_id == r.race_id,
+                    Result.program_name == program_name,
+                    Result.status == "Finished",
+                    Result.total_sec.isnot(None),
+                )
+            ).all()
+
+        athletes_with_strength: list[tuple[str, float]] = []
+        for race_res in all_race_athletes_cache[r.race_id]:
+            aid = race_res.athlete_id
+            if aid not in athlete_strength_cache:
+                s_data = compute_athlete_strength_full(session, aid, program_name)
+                athlete_strength_cache[aid] = s_data.get("strength") if s_data else None
+            s = athlete_strength_cache[aid]
+            if s is not None:
+                athletes_with_strength.append((aid, s))
+
+        athletes_sorted = sorted(athletes_with_strength, key=lambda x: x[1])
+        strength_rank: Optional[int] = next(
+            (i + 1 for i, (aid, _) in enumerate(athletes_sorted) if aid == athlete_id),
+            None,
+        )
+
         race_details.append({
             "race_id": race.id,
             "race_name": race.name,
@@ -68,10 +98,13 @@ async def get_athlete(
             "total_sec": r.total_sec,
             "standard_total_sec": standard_total,
             "swim_sec": r.swim_sec,
+            "t1_sec": r.t1_sec,
             "bike_sec": r.bike_sec,
+            "t2_sec": r.t2_sec,
             "run_sec": r.run_sec,
             "position": r.position,
             "difficulty_offset": difficulty,
+            "strength_rank": strength_rank,
         })
 
     return {

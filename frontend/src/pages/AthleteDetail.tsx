@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { api, formatTime } from '../api'
 import './pages.css'
+
 
 export default function AthleteDetail() {
   const { athleteId } = useParams<{ athleteId: string }>()
@@ -13,6 +14,7 @@ export default function AthleteDetail() {
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getAthlete>> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [expandedRaces, setExpandedRaces] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     api.getPrograms().then((r) => {
@@ -32,7 +34,12 @@ export default function AthleteDetail() {
     }
     setLoading(true)
     api.getAthlete(athleteId, prog)
-      .then(setData)
+      .then((d) => {
+        setData(d)
+        if ('races' in d) {
+          setExpandedRaces(new Set(d.races.map((r) => r.race_id)))
+        }
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
   }, [athleteId, selProgram, programs])
@@ -40,6 +47,15 @@ export default function AthleteDetail() {
   useEffect(() => {
     if (program && !selProgram) setSelProgram(program)
   }, [program])
+
+  const toggleExpand = (raceId: number) => {
+    setExpandedRaces((prev) => {
+      const next = new Set(prev)
+      if (next.has(raceId)) next.delete(raceId)
+      else next.add(raceId)
+      return next
+    })
+  }
 
   if (error) return <div className="error">{error}</div>
   if (loading && !data) return <div className="loading">読み込み中...</div>
@@ -55,6 +71,8 @@ export default function AthleteDetail() {
       standard: r.standard_total_sec,
       position: r.position,
     }))
+
+  const sortedRaces = [...data.races].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
 
   return (
     <div className="athlete-detail-page">
@@ -103,33 +121,112 @@ export default function AthleteDetail() {
           </div>
         )}
 
+        <p className="desc" style={{ marginTop: '1rem' }}>
+          行をクリックするとセグメント別タイムの展開/折りたたみができます。
+          「逆転」列は強さ指標に基づく期待順位と実際の順位の差（↑＝上回り、↓＝下回り）を示します。
+        </p>
+
         <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
                 <th>レース</th>
                 <th>日付</th>
-                <th>順位</th>
+                <th>実順位</th>
+                <th>標準化順位</th>
+                <th>逆転</th>
                 <th>実タイム</th>
                 <th>標準化</th>
               </tr>
             </thead>
             <tbody>
-              {[...data.races]
-                .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-                .map((r) => (
-                  <tr key={r.race_id}>
-                    <td>
-                      <Link to={`/races/${r.race_id}?program=${encodeURIComponent(selProgram || '')}`}>
-                        {r.race_name || `Race ${r.race_id}`}
-                      </Link>
-                    </td>
-                    <td>{r.date ?? '--'}</td>
-                    <td className="rank">{r.position ?? '--'}</td>
-                    <td className="mono">{formatTime(r.total_sec)}</td>
-                    <td className="mono">{formatTime(r.standard_total_sec)}</td>
-                  </tr>
-                ))}
+              {sortedRaces.map((r) => {
+                const isExpanded = expandedRaces.has(r.race_id)
+                const diff = r.strength_rank != null && r.position != null
+                  ? r.strength_rank - r.position
+                  : null
+                return (
+                  <Fragment key={r.race_id}>
+                    <tr
+                      className="race-row-expandable"
+                      onClick={() => toggleExpand(r.race_id)}
+                      title="クリックしてセグメントタイムを表示"
+                    >
+                      <td>
+                        <span className="expand-toggle">{isExpanded ? '▼' : '▶'}</span>
+                        {' '}
+                        <Link
+                          to={`/races/${r.race_id}?program=${encodeURIComponent(selProgram || '')}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {r.race_name || `Race ${r.race_id}`}
+                        </Link>
+                      </td>
+                      <td>{r.date ?? '--'}</td>
+                      <td className="rank">{r.position ?? '--'}</td>
+                      <td className="rank">{r.strength_rank ?? '--'}</td>
+                      <td>
+                        {diff === null ? (
+                          <span className="mono">--</span>
+                        ) : diff === 0 ? (
+                          <span className="reversal-none">±0</span>
+                        ) : diff > 0 ? (
+                          <span
+                            className="reversal-up"
+                            title={`強さ順位${r.strength_rank}位に対し実際${r.position}位（${diff}位分上回り）`}
+                          >
+                            ↑{diff}
+                          </span>
+                        ) : (
+                          <span
+                            className="reversal-down"
+                            title={`強さ順位${r.strength_rank}位に対し実際${r.position}位（${Math.abs(diff)}位分下回り）`}
+                          >
+                            ↓{Math.abs(diff)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="mono">{formatTime(r.total_sec)}</td>
+                      <td className="mono">{formatTime(r.standard_total_sec)}</td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="segment-detail-row">
+                        <td colSpan={7}>
+                          <div className="segment-chips">
+                            <span className="segment-chip">
+                              <span className="segment-label">Swim</span>
+                              <span className="segment-value">{formatTime(r.swim_sec)}</span>
+                            </span>
+                            <span className="segment-chip">
+                              <span className="segment-label">T1</span>
+                              <span className="segment-value">{formatTime(r.t1_sec)}</span>
+                            </span>
+                            <span className="segment-chip">
+                              <span className="segment-label">Bike</span>
+                              <span className="segment-value">{formatTime(r.bike_sec)}</span>
+                            </span>
+                            <span className="segment-chip">
+                              <span className="segment-label">T2</span>
+                              <span className="segment-value">{formatTime(r.t2_sec)}</span>
+                            </span>
+                            <span className="segment-chip">
+                              <span className="segment-label">Run</span>
+                              <span className="segment-value">{formatTime(r.run_sec)}</span>
+                            </span>
+                            {r.strength_rank != null && r.position != null && r.strength_rank !== r.position && (
+                              <span className="segment-chip reversal-note">
+                                {r.strength_rank - r.position > 0
+                                  ? `標準化比${r.strength_rank - r.position}位分上回り（逆転あり）`
+                                  : `標準化比${r.position - r.strength_rank}位分下回り（逆転あり）`}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>

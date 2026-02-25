@@ -112,10 +112,13 @@ export interface AthleteRace {
   total_sec: number | null;
   standard_total_sec: number | null;
   swim_sec: number | null;
+  t1_sec: number | null;
   bike_sec: number | null;
+  t2_sec: number | null;
   run_sec: number | null;
   position: number | null;
   difficulty_offset: number;
+  strength_rank: number | null;
 }
 
 export interface AthleteDetail {
