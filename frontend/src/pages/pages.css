@@ -267,7 +267,53 @@
 }
 
 .difficulty-block {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.difficulty-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .difficulty-compare-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.difficulty-col {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+}
+
+.difficulty-col-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.difficulty-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-left: 0.4rem;
+  font-weight: 400;
+}
+
+.difficulty-na {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.difficulty-chip-na {
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
 }
 
 .difficulty-segments {

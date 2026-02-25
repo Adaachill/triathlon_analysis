@@ -85,10 +85,32 @@ export interface DifficultySegments {
   run_sec: number;
 }
 
+export interface DifficultySegmentsNullable {
+  swim_sec: number | null;
+  t1_sec: number | null;
+  bike_sec: number | null;
+  t2_sec: number | null;
+  run_sec: number | null;
+}
+
+export interface DifficultySegmentsN {
+  swim_sec: number;
+  t1_sec: number;
+  bike_sec: number;
+  t2_sec: number;
+  run_sec: number;
+}
+
 export interface RaceDetail {
   race: Race;
   difficulty_offset: number | null;
+  difficulty_n: number;
   difficulty_segments: DifficultySegments | null;
+  difficulty_segments_n: DifficultySegmentsN | null;
+  difficulty_cross: number | null;
+  difficulty_n_cross: number;
+  difficulty_segments_cross: DifficultySegmentsNullable | null;
+  difficulty_segments_n_cross: DifficultySegmentsN | null;
   results: RaceResult[];
 }
 

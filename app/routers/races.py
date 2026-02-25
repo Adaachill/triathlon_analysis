@@ -9,6 +9,10 @@ from app.models import Race, Result
 from app.services.difficulty import (
     compute_race_difficulty,
     compute_race_difficulty_segments,
+    compute_race_difficulty_with_n,
+    compute_race_difficulty_segments_with_n,
+    compute_race_difficulty_cross_with_n,
+    compute_race_difficulty_segments_cross_with_n,
     get_standard_total_sec,
     compute_athlete_strength_full,
 )
@@ -60,13 +64,27 @@ async def get_race(
 
     # 難易度を計算（program_name指定時のみ）
     difficulty = None
+    difficulty_n: int = 0
     difficulty_segments = None
+    difficulty_segments_n: dict[str, int] | None = None
+    difficulty_cross: float | None = None
+    difficulty_n_cross: int = 0
+    difficulty_segments_cross: dict[str, float | None] | None = None
+    difficulty_segments_n_cross: dict[str, int] | None = None
     athlete_strength_cache: dict[str, Optional[dict]] = {}
     strength_rank_map: dict[str, int] = {}
 
     if program_name:
-        difficulty = compute_race_difficulty(session, race_id, program_name)
-        difficulty_segments = compute_race_difficulty_segments(session, race_id, program_name)
+        difficulty, difficulty_n = compute_race_difficulty_with_n(session, race_id, program_name)
+        difficulty_segments, difficulty_segments_n = compute_race_difficulty_segments_with_n(
+            session, race_id, program_name
+        )
+        difficulty_cross, difficulty_n_cross = compute_race_difficulty_cross_with_n(
+            session, race_id, program_name
+        )
+        difficulty_segments_cross, difficulty_segments_n_cross = (
+            compute_race_difficulty_segments_cross_with_n(session, race_id, program_name)
+        )
 
         # 完走選手の強さ指標を取得して strength_rank を計算
         finished = [r for r in results if r.status == "Finished" and r.total_sec is not None]
@@ -130,7 +148,13 @@ async def get_race(
             "note": race.note,
         },
         "difficulty_offset": difficulty,
+        "difficulty_n": difficulty_n,
         "difficulty_segments": difficulty_segments,
+        "difficulty_segments_n": difficulty_segments_n,
+        "difficulty_cross": difficulty_cross,
+        "difficulty_n_cross": difficulty_n_cross,
+        "difficulty_segments_cross": difficulty_segments_cross,
+        "difficulty_segments_n_cross": difficulty_segments_n_cross,
         "results": result_list,
     }
 
