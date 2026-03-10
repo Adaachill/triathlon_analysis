@@ -272,14 +272,29 @@
 
 .difficulty-compare-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .difficulty-compare-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 640px) {
   .difficulty-compare-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.outlier-row {
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+
+.outlier-row:hover {
+  opacity: 1;
 }
 
 .difficulty-col {
@@ -445,4 +460,10 @@
 .diff-slow {
   color: #f87171;
   font-weight: 600;
+}
+
+.seg-total-row td {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+  border-bottom: none;
 }

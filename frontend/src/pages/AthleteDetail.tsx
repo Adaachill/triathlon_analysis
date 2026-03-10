@@ -1,7 +1,7 @@
 import { useState, useEffect, Fragment } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { api, formatTime } from '../api'
+import { api, formatTime, formatDiff } from '../api'
 import './pages.css'
 
 
@@ -91,8 +91,8 @@ export default function AthleteDetail() {
           <span className="country">{data.country}</span>
         </h2>
         <p className="athlete-strength">
-          標準化Total平均: <strong>{formatTime(data.strength)}</strong>
-          （{data.race_count}レースの平均）
+          ALS strength（標準難易度でのTotal予測）: <strong>{formatTime(data.strength)}</strong>
+          （{data.race_count}レース）
         </p>
         <div className="athlete-segments">
           <span title="Swim">Swim <strong>{formatTime(data.strength_swim)}</strong></span>
@@ -115,7 +115,7 @@ export default function AthleteDetail() {
                   labelFormatter={(_, payload) => payload?.[0]?.payload?.name}
                 />
                 <Line type="monotone" dataKey="total" name="実タイム" stroke="var(--text-muted)" strokeWidth={2} dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="standard" name="標準化" stroke="var(--accent)" strokeWidth={2} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="standard" name="ALS標準化" stroke="var(--accent)" strokeWidth={2} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -192,35 +192,69 @@ export default function AthleteDetail() {
                     {isExpanded && (
                       <tr className="segment-detail-row">
                         <td colSpan={7}>
-                          <div className="segment-chips">
-                            <span className="segment-chip">
-                              <span className="segment-label">Swim</span>
-                              <span className="segment-value">{formatTime(r.swim_sec)}</span>
-                            </span>
-                            <span className="segment-chip">
-                              <span className="segment-label">T1</span>
-                              <span className="segment-value">{formatTime(r.t1_sec)}</span>
-                            </span>
-                            <span className="segment-chip">
-                              <span className="segment-label">Bike</span>
-                              <span className="segment-value">{formatTime(r.bike_sec)}</span>
-                            </span>
-                            <span className="segment-chip">
-                              <span className="segment-label">T2</span>
-                              <span className="segment-value">{formatTime(r.t2_sec)}</span>
-                            </span>
-                            <span className="segment-chip">
-                              <span className="segment-label">Run</span>
-                              <span className="segment-value">{formatTime(r.run_sec)}</span>
-                            </span>
-                            {r.strength_rank != null && r.position != null && r.strength_rank !== r.position && (
-                              <span className="segment-chip reversal-note">
-                                {r.strength_rank - r.position > 0
-                                  ? `標準化比${r.strength_rank - r.position}位分上回り（逆転あり）`
-                                  : `標準化比${r.position - r.strength_rank}位分下回り（逆転あり）`}
-                              </span>
-                            )}
-                          </div>
+                          <table className="seg-compare-table">
+                            <thead>
+                              <tr>
+                                <th>セグメント</th>
+                                <th>実タイム</th>
+                                <th>ALS標準化</th>
+                                <th>差分</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {([
+                                { label: 'Swim', actual: r.swim_sec, std: r.standard_swim_sec },
+                                { label: 'T1',   actual: r.t1_sec,   std: r.standard_t1_sec   },
+                                { label: 'Bike', actual: r.bike_sec, std: r.standard_bike_sec },
+                                { label: 'T2',   actual: r.t2_sec,   std: r.standard_t2_sec   },
+                                { label: 'Run',  actual: r.run_sec,  std: r.standard_run_sec  },
+                              ] as const).map(({ label, actual, std }) => {
+                                const diff = actual != null && std != null ? actual - std : null
+                                return (
+                                  <tr key={label}>
+                                    <td className="seg-label">{label}</td>
+                                    <td className="mono">{formatTime(actual)}</td>
+                                    <td className="mono">{formatTime(std)}</td>
+                                    <td className={
+                                      diff == null ? 'mono' :
+                                      diff < 0 ? 'mono diff-fast' : diff > 0 ? 'mono diff-slow' : 'mono'
+                                    }>
+                                      {formatDiff(diff)}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                              {(() => {
+                                const segs = [
+                                  { actual: r.swim_sec, std: r.standard_swim_sec },
+                                  { actual: r.t1_sec,   std: r.standard_t1_sec   },
+                                  { actual: r.bike_sec, std: r.standard_bike_sec },
+                                  { actual: r.t2_sec,   std: r.standard_t2_sec   },
+                                  { actual: r.run_sec,  std: r.standard_run_sec  },
+                                ]
+                                const totalActual = segs.every(({ actual }) => actual != null)
+                                  ? segs.reduce((s, { actual }) => s + (actual as number), 0)
+                                  : null
+                                const totalStd = segs.every(({ std }) => std != null)
+                                  ? segs.reduce((s, { std }) => s + (std as number), 0)
+                                  : null
+                                const totalDiff = totalActual != null && totalStd != null ? totalActual - totalStd : null
+                                return (
+                                  <tr className="seg-total-row">
+                                    <td className="seg-label">合計</td>
+                                    <td className="mono">{formatTime(totalActual)}</td>
+                                    <td className="mono">{formatTime(totalStd)}</td>
+                                    <td className={
+                                      totalDiff == null ? 'mono' :
+                                      totalDiff < 0 ? 'mono diff-fast' : totalDiff > 0 ? 'mono diff-slow' : 'mono'
+                                    }>
+                                      {formatDiff(totalDiff)}
+                                    </td>
+                                  </tr>
+                                )
+                              })()}
+                            </tbody>
+                          </table>
                         </td>
                       </tr>
                     )}

@@ -79,6 +79,8 @@ export default function RaceDetail() {
     difficulty_segments, difficulty_segments_n,
     difficulty_cross, difficulty_n_cross,
     difficulty_segments_cross, difficulty_segments_n_cross,
+    difficulty_als, difficulty_n_als,
+    difficulty_segments_als,
   } = data
 
   const startEdit = () => {
@@ -178,7 +180,7 @@ export default function RaceDetail() {
         {!editing && race.date && <p className="race-meta">日付: {race.date}</p>}
         {!editing && race.location && <p className="race-meta">開催国: {race.location}</p>}
         {!editing && race.note && <p className="race-meta">メモ: {race.note}</p>}
-        {(difficulty_offset != null || difficulty_cross != null) && (
+        {(difficulty_offset != null || difficulty_cross != null || difficulty_als != null) && (
           <div className="difficulty-block">
             <div className="difficulty-compare-grid">
               {/* 同一プログラム難易度 */}
@@ -246,6 +248,42 @@ export default function RaceDetail() {
                   <p className="race-meta difficulty-na">共通選手なし</p>
                 )}
               </div>
+
+              {/* ALS最適化難易度 */}
+              <div className="difficulty-col">
+                <p className="difficulty-col-label">難易度（ALS最適化, N={difficulty_n_als}）</p>
+                {difficulty_als != null ? (
+                  <>
+                    <p className="race-meta">
+                      合計: <strong>{difficulty_als >= 0 ? '+' : ''}{Math.round(difficulty_als)}秒</strong>
+                      <span className="difficulty-note">（平均難易度より{difficulty_als >= 0 ? '厳しい' : '易しい'}コース）</span>
+                    </p>
+                    {difficulty_segments_als && (
+                      <div className="difficulty-segments">
+                        {[
+                          { label: 'スイム', value: difficulty_segments_als.swim_sec },
+                          { label: 'T1',     value: difficulty_segments_als.t1_sec   },
+                          { label: 'バイク', value: difficulty_segments_als.bike_sec },
+                          { label: 'T2',     value: difficulty_segments_als.t2_sec   },
+                          { label: 'ラン',   value: difficulty_segments_als.run_sec  },
+                        ].map(({ label, value }) => (
+                          value != null ? (
+                            <span key={label} className={`difficulty-chip ${value >= 0 ? 'harder' : 'easier'}`}>
+                              {label}: {value >= 0 ? '+' : ''}{Math.round(value)}秒
+                            </span>
+                          ) : (
+                            <span key={label} className="difficulty-chip difficulty-chip-na">
+                              {label}: --
+                            </span>
+                          )
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="race-meta difficulty-na">データなし</p>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -310,11 +348,15 @@ export default function RaceDetail() {
                     ? r.strength_rank - r.position
                     : null
                 const canExpand = hasPred && r.status === 'Finished'
+                const isOutlier = r.outlier_weight != null && r.outlier_weight < 0.8
 
                 return (
                   <Fragment key={r.athlete_id}>
                     <tr
-                      className={canExpand ? 'race-row-expandable' : undefined}
+                      className={[
+                        canExpand ? 'race-row-expandable' : '',
+                        isOutlier ? 'outlier-row' : '',
+                      ].filter(Boolean).join(' ') || undefined}
                       onClick={canExpand ? () => toggleExpand(r.athlete_id) : undefined}
                       title={canExpand ? 'クリックしてセグメント詳細を表示' : undefined}
                     >
@@ -352,6 +394,7 @@ export default function RaceDetail() {
                         <Link
                           to={`/athletes/${r.athlete_id}?program=${encodeURIComponent(selProgram || '')}`}
                           onClick={(e) => e.stopPropagation()}
+                          title={isOutlier ? `外れ値の可能性（体調不良・アクシデント等）。重み: ${r.outlier_weight?.toFixed(2)}` : undefined}
                         >
                           {`${r.first_name} ${r.last_name}`.trim() || r.athlete_id}
                         </Link>
@@ -398,6 +441,30 @@ export default function RaceDetail() {
                                   </tr>
                                 )
                               })}
+                              {(() => {
+                                const actuals = SEGS.map(({ key }) => r[key] as number | null | undefined)
+                                const preds   = SEGS.map(({ predKey }) => r[predKey] as number | null | undefined)
+                                const totalActual = actuals.every((v) => v != null)
+                                  ? actuals.reduce<number>((s, v) => s + (v as number), 0)
+                                  : null
+                                const totalPred = preds.every((v) => v != null)
+                                  ? preds.reduce<number>((s, v) => s + (v as number), 0)
+                                  : null
+                                const totalDiff = totalActual != null && totalPred != null ? totalActual - totalPred : null
+                                return (
+                                  <tr className="seg-total-row">
+                                    <td className="seg-label">合計</td>
+                                    <td className="mono">{formatTime(totalActual)}</td>
+                                    <td className="mono">{formatTime(totalPred)}</td>
+                                    <td className={
+                                      totalDiff == null ? 'mono' :
+                                      totalDiff < 0 ? 'mono diff-fast' : totalDiff > 0 ? 'mono diff-slow' : 'mono'
+                                    }>
+                                      {formatDiff(totalDiff)}
+                                    </td>
+                                  </tr>
+                                )
+                              })()}
                             </tbody>
                           </table>
                         </td>

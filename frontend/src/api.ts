@@ -75,6 +75,7 @@ export interface RaceResult {
   pred_bike_sec?: number | null;
   pred_t2_sec?: number | null;
   pred_run_sec?: number | null;
+  outlier_weight?: number | null;
 }
 
 export interface DifficultySegments {
@@ -111,6 +112,9 @@ export interface RaceDetail {
   difficulty_n_cross: number;
   difficulty_segments_cross: DifficultySegmentsNullable | null;
   difficulty_segments_n_cross: DifficultySegmentsN | null;
+  difficulty_als: number | null;
+  difficulty_n_als: number;
+  difficulty_segments_als: DifficultySegmentsNullable | null;
   results: RaceResult[];
 }
 
@@ -144,6 +148,11 @@ export interface AthleteRace {
   bike_sec: number | null;
   t2_sec: number | null;
   run_sec: number | null;
+  standard_swim_sec: number | null;
+  standard_t1_sec: number | null;
+  standard_bike_sec: number | null;
+  standard_t2_sec: number | null;
+  standard_run_sec: number | null;
   position: number | null;
   difficulty_offset: number;
   strength_rank: number | null;
