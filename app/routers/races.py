@@ -7,15 +7,14 @@ from sqlmodel import Session, select
 from app.deps import get_db
 from app.models import Race, Result
 from app.services.difficulty import (
-    compute_race_difficulty,
-    compute_race_difficulty_segments,
     compute_race_difficulty_with_n,
     compute_race_difficulty_segments_with_n,
     compute_race_difficulty_cross_with_n,
     compute_race_difficulty_segments_cross_with_n,
     get_standard_total_sec,
-    compute_athlete_strength_full,
+    SEGMENT_FIELDS,
 )
+from app.services.als_optimizer import get_optimized_program
 
 router = APIRouter(prefix="/races", tags=["races"])
 
@@ -71,8 +70,13 @@ async def get_race(
     difficulty_n_cross: int = 0
     difficulty_segments_cross: dict[str, float | None] | None = None
     difficulty_segments_n_cross: dict[str, int] | None = None
-    athlete_strength_cache: dict[str, Optional[dict]] = {}
+
+    difficulty_als: float | None = None
+    difficulty_n_als: int = 0
+    difficulty_segments_als: dict[str, float | None] | None = None
+
     strength_rank_map: dict[str, int] = {}
+    als_race_diffs: dict[str, float] = {}
 
     if program_name:
         difficulty, difficulty_n = compute_race_difficulty_with_n(session, race_id, program_name)
@@ -86,18 +90,33 @@ async def get_race(
             compute_race_difficulty_segments_cross_with_n(session, race_id, program_name)
         )
 
-        # 完走選手の強さ指標を取得して strength_rank を計算
-        finished = [r for r in results if r.status == "Finished" and r.total_sec is not None]
-        athletes_with_strength: list[tuple[str, float]] = []
-        for r in finished:
-            if r.athlete_id not in athlete_strength_cache:
-                athlete_strength_cache[r.athlete_id] = compute_athlete_strength_full(
-                    session, r.athlete_id, program_name
-                )
-            s = athlete_strength_cache[r.athlete_id]
-            if s and s.get("strength") is not None:
-                athletes_with_strength.append((r.athlete_id, s["strength"]))
+        # ALS 最適化で難易度・強さを取得
+        opt = get_optimized_program(session, program_name)
+        als_race_diffs = opt["race_difficulties"].get(race_id, {})
+        als_strengths = opt["athlete_strengths"]
+        als_counts = opt["athlete_race_counts"]
+        als_outlier_weights = opt["outlier_weights"]
 
+        difficulty_als = als_race_diffs.get("total_sec")
+        difficulty_segments_als = {f: als_race_diffs.get(f) for f in SEGMENT_FIELDS}
+
+        # ALS N: レースの完走選手のうち athlete_race_counts >= 2 の人数
+        difficulty_n_als = sum(
+            1
+            for r in results
+            if r.status == "Finished"
+            and r.total_sec is not None
+            and als_counts.get(r.athlete_id, 0) >= 2
+        )
+
+        # strength_rank: ALS strength を使用
+        finished = [r for r in results if r.status == "Finished" and r.total_sec is not None]
+        athletes_with_strength: list[tuple[str, float]] = [
+            (r.athlete_id, als_strengths[r.athlete_id]["strength"])
+            for r in finished
+            if r.athlete_id in als_strengths
+            and als_strengths[r.athlete_id].get("strength") is not None
+        ]
         athletes_sorted = sorted(athletes_with_strength, key=lambda x: x[1])
         strength_rank_map = {aid: i + 1 for i, (aid, _) in enumerate(athletes_sorted)}
 
@@ -126,15 +145,22 @@ async def get_race(
             result_dict["standard_total_sec"] = get_standard_total_sec(
                 r.total_sec, difficulty
             )
-        # 予想セグメントタイム = 選手のstrength_segment + レースのsegment難易度
-        if difficulty_segments is not None:
-            s_data = athlete_strength_cache.get(r.athlete_id)
+
+        if program_name:
+            # outlier_weight（ALS外れ値の重み）
+            result_dict["outlier_weight"] = (
+                als_outlier_weights.get(race_id, {}).get(r.athlete_id, 1.0)
+            )
+
+            # 予想セグメントタイム = ALS strength + ALS difficulty
+            als_str = als_strengths.get(r.athlete_id, {})
             for seg in _SEGS:
-                strength_val = s_data.get(f"strength_{seg}") if s_data else None
-                diff_val = difficulty_segments.get(f"{seg}_sec", 0.0)
+                strength_val = als_str.get(f"strength_{seg}")
+                diff_val = als_race_diffs.get(f"{seg}_sec", 0.0)
                 result_dict[f"pred_{seg}_sec"] = (
                     float(strength_val + diff_val) if strength_val is not None else None
                 )
+
         result_list.append(result_dict)
 
     return {
@@ -155,6 +181,9 @@ async def get_race(
         "difficulty_n_cross": difficulty_n_cross,
         "difficulty_segments_cross": difficulty_segments_cross,
         "difficulty_segments_n_cross": difficulty_segments_n_cross,
+        "difficulty_als": difficulty_als,
+        "difficulty_n_als": difficulty_n_als,
+        "difficulty_segments_als": difficulty_segments_als,
         "results": result_list,
     }
 
