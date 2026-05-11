@@ -118,14 +118,6 @@ export interface DifficultySegmentsN {
 
 export interface RaceDetail {
   race: Race;
-  difficulty_offset: number | null;
-  difficulty_n: number;
-  difficulty_segments: DifficultySegments | null;
-  difficulty_segments_n: DifficultySegmentsN | null;
-  difficulty_cross: number | null;
-  difficulty_n_cross: number;
-  difficulty_segments_cross: DifficultySegmentsNullable | null;
-  difficulty_segments_n_cross: DifficultySegmentsN | null;
   difficulty_als: number | null;
   difficulty_n_als: number;
   difficulty_segments_als: DifficultySegmentsNullable | null;
