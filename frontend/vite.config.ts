@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 // サブパスで公開する場合は vite build --base /triathlon_analysis/
 export default defineConfig({
   plugins: [react()],
-  base: '/',
+  base: process.env.VITE_BASE_URL ?? '/',
   server: {
     port: 5173,
     proxy: {

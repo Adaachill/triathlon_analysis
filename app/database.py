@@ -1,10 +1,15 @@
+import os
 from sqlmodel import create_engine, SQLModel, Session
 
-DATABASE_URL = "sqlite:///./app.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./app.db")
 
-engine = create_engine(
-    DATABASE_URL, echo=False, connect_args={"check_same_thread": False}
-)
+# Neon / 旧Heroku は "postgres://" で始まる場合がある
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+
+engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
 
 
 def init_db() -> None:

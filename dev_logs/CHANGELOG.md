@@ -70,4 +70,50 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-11: Render + Neon デプロイ対応・GitHub Pages SPA修正
+**コミット:** `（このコミット）`
+**ブランチ:** main
+
+### 変更内容
+- `app/database.py`: `DATABASE_URL` 環境変数でSQLite/PostgreSQL切り替え対応
+- `requirements.txt`: `psycopg2-binary==2.9.10` を追加
+- `render.yaml`: Renderデプロイ設定ファイルを新規作成
+- `frontend/vite.config.ts`: `VITE_BASE_URL` 環境変数でGitHub Pagesのベースパス制御
+- `.github/workflows/deploy-pages.yml`: ビルド時に `VITE_BASE_URL=/triathlon_analysis/` を注入
+- `frontend/public/404.html`: GitHub Pages SPA直接URLアクセスの404回避
+- `frontend/index.html`: 404.htmlからのリダイレクトパス復元スクリプト追加
+
+### 変更意図・背景
+ローカル専用だったアプリをWeb公開するための対応。DBをSQLiteからNeon（PostgreSQL）に
+移行し、バックエンドをRenderで公開する。フロントエンドはGitHub Pagesで継続。
+
+### 技術的決定事項
+
+**Render + Neon + GitHub Pages を選んだ理由（vs Firebase）:**
+
+| 検討項目 | Firebase Cloud Functions | Render + Neon |
+|---|---|---|
+| 既存コードの変更量 | 大（FastAPI→Cloud Functions形式に書き直し） | 最小（DB接続文字列のみ） |
+| SQLiteからの移行 | FirestoreかCloud SQL（有料）が必要 | NeonでPostgreSQL、無料で使える |
+| ALS計算の実行 | 関数タイムアウト・コールドスタートが懸念 | 常駐プロセスのため問題なし |
+| Pythonサポート | Gen2で不安定 | ネイティブ対応 |
+| コスト | 無料枠はあるがスケール時に複雑 | 無料プランが明快 |
+
+→ 既存のFastAPI資産をそのまま活かせるRender + Neonが最小リスク・最速で選定。
+
+**GitHub Pages SPA routing問題:**
+`BrowserRouter` を使っているため、`/races/123` への直接アクセスでGitHub Pagesが404を
+返す。`public/404.html` でパスをクエリ文字列にエンコードして `index.html` に転送し、
+`index.html` 側のスクリプトで復元する標準的な回避策（spa-github-pages手法）を採用。
+`HashRouter` への変更も検討したが、URLの見た目が変わるため採用しなかった。
+
+### 残課題・次のステップ
+1. Neonでデータベースを作成し接続文字列を取得
+2. Renderにリポジトリをデプロイし `DATABASE_URL` を設定
+3. GitHubリポジトリのSecretsに `VITE_API_URL`（RenderのURL）を登録
+4. GitHubリポジトリのPagesを有効化（Settings → Pages → GitHub Actions）
+5. Renderにデプロイ後、既存データをExcelから再インポート
+
+---
+
 ## 今後の記録はここより上に追記
