@@ -1,11 +1,159 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, Fragment, useMemo, useRef } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { api, formatTime, formatDiff } from '../api'
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, LabelList,
+} from 'recharts'
+import { api, formatTime, formatDiff, getCountryFlag } from '../api'
 import type { RankingEntry, AthleteRace } from '../api'
 import './pages.css'
 
 const DAYS = 86400000
+
+const SEG_CONFIG = [
+  { key: 'swim_sec' as keyof AthleteRace, label: 'Swim', icon: '🏊', color: '#38bdf8' },
+  { key: 't1_sec'   as keyof AthleteRace, label: 'T1',   icon: '⚡', color: '#c4b5fd' },
+  { key: 'bike_sec' as keyof AthleteRace, label: 'Bike', icon: '🚴', color: '#fb923c' },
+  { key: 't2_sec'   as keyof AthleteRace, label: 'T2',   icon: '🔄', color: '#f9a8d4' },
+  { key: 'run_sec'  as keyof AthleteRace, label: 'Run',  icon: '🏃', color: '#4ade80' },
+]
+
+const CHECKPOINT_LABELS_A = [
+  { headline: 'スイム',      sub: 'Swim のみ',             icon: '🏊' },
+  { headline: 'T1 通過',    sub: 'Swim + T1',              icon: '⚡' },
+  { headline: 'バイク',     sub: 'バイク終了後',             icon: '🚴' },
+  { headline: 'T2 通過',   sub: 'バイク + T2',              icon: '🔄' },
+  { headline: 'フィニッシュ', sub: '最終タイム',             icon: '🏁' },
+]
+
+function AthleteCumulativeChart({ races }: { races: AthleteRace[] }) {
+  const [step, setStep] = useState(4)
+  const [animKey, setAnimKey] = useState(0)
+  const touchStartX = useRef<number | null>(null)
+  const touchStartY = useRef<number | null>(null)
+
+  const sorted = useMemo(() =>
+    [...races]
+      .filter((r) => r.total_sec != null)
+      .sort((a, b) => (a.date || '').localeCompare(b.date || '')),
+    [races]
+  )
+
+  const chartData = useMemo(() =>
+    sorted.map((r) => {
+      const entry: Record<string, number | string> = {
+        name: r.race_name ? r.race_name.replace(/^20\d\d\s+/, '').slice(0, 20) : `Race ${r.race_id}`,
+      }
+      SEG_CONFIG.forEach((seg, i) => {
+        entry[seg.key as string] = i <= step ? ((r[seg.key] as number | null) ?? 0) : 0
+      })
+      return entry
+    }),
+    [sorted, step]
+  )
+
+  const goTo = (newStep: number) => {
+    setStep(newStep)
+    setAnimKey((k) => k + 1)
+  }
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+  }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    const dy = e.changedTouches[0].clientY - touchStartY.current
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+      if (dx < 0 && step < 4) goTo(step + 1)
+      if (dx > 0 && step > 0) goTo(step - 1)
+    }
+    touchStartX.current = null
+    touchStartY.current = null
+  }
+
+  const cp = CHECKPOINT_LABELS_A[step]
+  if (sorted.length === 0) return null
+
+  return (
+    <div className="cum-chart-card">
+      <div className="cum-chart-header">
+        <div className="cum-chart-title">
+          <span className="cum-chart-icon">{cp.icon}</span>
+          <div>
+            <div className="cum-chart-headline">{cp.headline}</div>
+            <div className="cum-chart-sub">{cp.sub}</div>
+          </div>
+        </div>
+        <div className="cum-step-dots" role="tablist">
+          {CHECKPOINT_LABELS_A.map((cl, i) => (
+            <button key={i} role="tab" aria-selected={i === step}
+              className={`cum-step-dot${i === step ? ' active' : ''}`}
+              onClick={() => goTo(i)} title={cl.headline} />
+          ))}
+        </div>
+      </div>
+
+      <div className="cum-chart-wrap" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        <button className="cum-nav-btn cum-nav-left" onClick={() => step > 0 && goTo(step - 1)}
+          disabled={step === 0} aria-label="前のチェックポイント">‹</button>
+
+        <div className="cum-chart-inner" key={animKey}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={chartData} margin={{ top: 24, right: 8, left: 0, bottom: 64 }}>
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={72} interval={0} />
+              <YAxis tickFormatter={(v) => formatTime(v)} tick={{ fontSize: 10 }} width={52} />
+              <Tooltip
+                formatter={(v: number, name: string) => {
+                  const seg = SEG_CONFIG.find((s) => (s.key as string) === name)
+                  return [formatTime(v), seg ? `${seg.icon} ${seg.label}` : name]
+                }}
+                contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', fontSize: '0.82rem', borderRadius: '8px' }}
+                cursor={{ fill: 'rgba(30,107,186,0.06)' }}
+              />
+              {SEG_CONFIG.map((seg, i) => (
+                <Bar key={seg.key as string} dataKey={seg.key as string} stackId="a" fill={seg.color}
+                  isAnimationActive animationDuration={500} animationEasing="ease-out"
+                  radius={i === step ? [4, 4, 0, 0] : i === 0 ? [0, 0, 4, 4] : undefined}>
+                  {i === step && (
+                    <LabelList position="top" content={(props: Record<string, unknown>) => {
+                      const x = props.x as number, y = props.y as number, width = props.width as number
+                      const index = props.index as number
+                      if (index == null || !sorted[index]) return null
+                      const r = sorted[index]
+                      let total = 0
+                      for (let si = 0; si <= step; si++) total += (r[SEG_CONFIG[si].key] as number | null) ?? 0
+                      return (
+                        <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={8} fill="var(--text-muted)">
+                          {formatTime(total)}
+                        </text>
+                      )
+                    }} />
+                  )}
+                </Bar>
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <button className="cum-nav-btn cum-nav-right" onClick={() => step < 4 && goTo(step + 1)}
+          disabled={step === 4} aria-label="次のチェックポイント">›</button>
+      </div>
+
+      <div className="cum-legend">
+        {SEG_CONFIG.slice(0, step + 1).map((seg) => (
+          <span key={seg.key as string} className="cum-legend-item">
+            <span className="cum-legend-dot" style={{ background: seg.color }} />
+            <span className="cum-legend-icon">{seg.icon}</span>
+            {seg.label}
+          </span>
+        ))}
+      </div>
+      <p className="cum-swipe-hint">← スワイプでチェックポイントを切り替え →</p>
+    </div>
+  )
+}
 
 function periodBounds() {
   const now = Date.now()
@@ -111,7 +259,7 @@ export default function AthleteDetail() {
   if (data && 'error' in data) return <div className="error">{(data as { error: string }).error}</div>
   if (!data) return null
 
-  const chartData = [...data.races]
+  const lineChartData = [...data.races]
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
     .map((r) => ({
       date: r.date || r.race_id,
@@ -137,7 +285,10 @@ export default function AthleteDetail() {
 
         <h2 className="athlete-name">
           {data.first_name} {data.last_name}
-          <span className="country">{data.country}</span>
+          <span className="country">
+            <span className="country-flag">{getCountryFlag(data.country)}</span>
+            {data.country}
+          </span>
         </h2>
         <p className="athlete-strength">
           ALS strength（標準難易度でのTotal予測）: <strong>{formatTime(data.strength)}</strong>
@@ -211,11 +362,18 @@ export default function AthleteDetail() {
           )
         })()}
 
-        {chartData.length > 0 && (
+        {data.races.length > 0 && (
           <div className="chart-container">
-            <h3>レース別タイム推移</h3>
+            <h3>レース別タイム推移（セグメント累積）</h3>
+            <AthleteCumulativeChart races={data.races} />
+          </div>
+        )}
+
+        {lineChartData.length > 0 && (
+          <div className="chart-container">
+            <h3>実タイム vs 標準化タイム推移</h3>
             <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={chartData} margin={{ top: 10, right: 20, left: 20, bottom: 30 }}>
+              <LineChart data={lineChartData} margin={{ top: 20, right: 20, left: 20, bottom: 30 }}>
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={(v) => formatTime(v)} />
                 <Tooltip
@@ -223,8 +381,12 @@ export default function AthleteDetail() {
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
                   labelFormatter={(_, payload) => payload?.[0]?.payload?.name}
                 />
-                <Line type="monotone" dataKey="total" name="実タイム" stroke="var(--text-muted)" strokeWidth={2} dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="standard" name="ALS標準化" stroke="var(--accent)" strokeWidth={2} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="total" name="実タイム" stroke="var(--text-muted)" strokeWidth={2} dot={{ r: 4 }}>
+                  <LabelList dataKey="total" position="top" formatter={(v: number) => formatTime(v)} style={{ fontSize: 9, fill: 'var(--text-muted)' }} />
+                </Line>
+                <Line type="monotone" dataKey="standard" name="ALS標準化" stroke="var(--accent)" strokeWidth={2} dot={{ r: 4 }}>
+                  <LabelList dataKey="standard" position="bottom" formatter={(v: number) => formatTime(v)} style={{ fontSize: 9, fill: 'var(--accent)' }} />
+                </Line>
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -242,10 +404,14 @@ export default function AthleteDetail() {
                 <th>レース</th>
                 <th>日付</th>
                 <th>実順位</th>
-                <th>標準化順位</th>
+                <th>強さ順位</th>
                 <th>逆転</th>
-                <th>実タイム</th>
-                <th>標準化</th>
+                <th>🏊 Swim</th>
+                <th>⚡ T1</th>
+                <th>🚴 Bike</th>
+                <th>🔄 T2</th>
+                <th>🏃 Run</th>
+                <th className="col-total-highlight">🏁 合計</th>
               </tr>
             </thead>
             <tbody>
@@ -259,7 +425,7 @@ export default function AthleteDetail() {
                     <tr
                       className="race-row-expandable"
                       onClick={() => toggleExpand(r.race_id)}
-                      title="クリックしてセグメントタイムを表示"
+                      title="クリックして標準化タイムを表示"
                     >
                       <td>
                         <span className="expand-toggle">{isExpanded ? '▼' : '▶'}</span>
@@ -280,71 +446,67 @@ export default function AthleteDetail() {
                         ) : diff === 0 ? (
                           <span className="reversal-none">±0</span>
                         ) : diff > 0 ? (
-                          <span
-                            className="reversal-up"
-                            title={`強さ順位${r.strength_rank}位に対し実際${r.position}位（${diff}位分上回り）`}
-                          >
+                          <span className="reversal-up" title={`強さ順位${r.strength_rank}位に対し実際${r.position}位（${diff}位分上回り）`}>
                             ↑{diff}
                           </span>
                         ) : (
-                          <span
-                            className="reversal-down"
-                            title={`強さ順位${r.strength_rank}位に対し実際${r.position}位（${Math.abs(diff)}位分下回り）`}
-                          >
+                          <span className="reversal-down" title={`強さ順位${r.strength_rank}位に対し実際${r.position}位（${Math.abs(diff)}位分下回り）`}>
                             ↓{Math.abs(diff)}
                           </span>
                         )}
                       </td>
-                      <td className="mono">{formatTime(r.total_sec)}</td>
-                      <td className="mono">{formatTime(r.standard_total_sec)}</td>
+                      <td className="mono">{formatTime(r.swim_sec)}</td>
+                      <td className="mono">{formatTime(r.t1_sec)}</td>
+                      <td className="mono">{formatTime(r.bike_sec)}</td>
+                      <td className="mono">{formatTime(r.t2_sec)}</td>
+                      <td className="mono">{formatTime(r.run_sec)}</td>
+                      <td className="mono time-actual-total">{formatTime(r.total_sec)}</td>
                     </tr>
                     {isExpanded && (
                       <tr className="segment-detail-row">
-                        <td colSpan={7}>
+                        <td colSpan={11}>
                           <table className="seg-compare-table">
                             <thead>
                               <tr>
                                 <th>セグメント</th>
                                 <th>実タイム</th>
+                                <th>標準化</th>
                                 <th>予想タイム</th>
-                                <th>差分</th>
+                                <th>差分（予想比）</th>
                               </tr>
                             </thead>
                             <tbody>
                               {([
-                                { label: 'Swim', actual: r.swim_sec, pred: r.pred_swim_sec },
-                                { label: 'T1',   actual: r.t1_sec,   pred: r.pred_t1_sec   },
-                                { label: 'Bike', actual: r.bike_sec, pred: r.pred_bike_sec },
-                                { label: 'T2',   actual: r.t2_sec,   pred: r.pred_t2_sec   },
-                                { label: 'Run',  actual: r.run_sec,  pred: r.pred_run_sec  },
-                              ] as const).map(({ label, actual, pred }) => {
-                                const diff = actual != null && pred != null ? actual - pred : null
+                                { label: '🏊 Swim', actual: r.swim_sec, std: r.standard_swim_sec, pred: r.pred_swim_sec },
+                                { label: '⚡ T1',   actual: r.t1_sec,   std: r.standard_t1_sec,   pred: r.pred_t1_sec   },
+                                { label: '🚴 Bike', actual: r.bike_sec, std: r.standard_bike_sec, pred: r.pred_bike_sec },
+                                { label: '🔄 T2',   actual: r.t2_sec,   std: r.standard_t2_sec,   pred: r.pred_t2_sec   },
+                                { label: '🏃 Run',  actual: r.run_sec,  std: r.standard_run_sec,  pred: r.pred_run_sec  },
+                              ] as const).map(({ label, actual, std, pred }) => {
+                                const d = actual != null && pred != null ? actual - pred : null
                                 return (
                                   <tr key={label}>
                                     <td className="seg-label">{label}</td>
                                     <td className="mono">{formatTime(actual)}</td>
+                                    <td className="mono time-actual-muted">{formatTime(std)}</td>
                                     <td className="mono">{formatTime(pred)}</td>
-                                    <td className={
-                                      diff == null ? 'mono' :
-                                      diff < 0 ? 'mono diff-fast' : diff > 0 ? 'mono diff-slow' : 'mono'
-                                    }>
-                                      {formatDiff(diff)}
+                                    <td className={d == null ? 'mono' : d < 0 ? 'mono diff-fast' : d > 0 ? 'mono diff-slow' : 'mono'}>
+                                      {formatDiff(d)}
                                     </td>
                                   </tr>
                                 )
                               })}
                               <tr className="seg-total-row">
-                                <td className="seg-label">合計</td>
+                                <td className="seg-label">🏁 合計</td>
                                 <td className="mono">{formatTime(r.total_sec)}</td>
+                                <td className="mono time-actual-muted">{formatTime(r.standard_total_sec)}</td>
                                 <td className="mono">{formatTime(r.pred_total_sec)}</td>
                                 <td className={
                                   r.total_sec == null || r.pred_total_sec == null ? 'mono' :
                                   r.total_sec - r.pred_total_sec < 0 ? 'mono diff-fast' :
                                   r.total_sec - r.pred_total_sec > 0 ? 'mono diff-slow' : 'mono'
                                 }>
-                                  {r.total_sec != null && r.pred_total_sec != null
-                                    ? formatDiff(r.total_sec - r.pred_total_sec)
-                                    : '--'}
+                                  {r.total_sec != null && r.pred_total_sec != null ? formatDiff(r.total_sec - r.pred_total_sec) : '--'}
                                 </td>
                               </tr>
                             </tbody>

@@ -404,3 +404,28 @@ export function formatDiff(sec: number | null | undefined): string {
   }
   return `${sign}${m}:${String(s).padStart(2, '0')}`;
 }
+
+const ISO3_TO_ISO2: Record<string, string> = {
+  JPN:'JP',AUS:'AU',USA:'US',GBR:'GB',FRA:'FR',GER:'DE',DEU:'DE',CHN:'CN',
+  KOR:'KR',NZL:'NZ',ESP:'ES',ITA:'IT',BRA:'BR',CAN:'CA',NOR:'NO',SWE:'SE',
+  FIN:'FI',DEN:'DK',DNK:'DK',BEL:'BE',NED:'NL',NLD:'NL',HUN:'HU',POL:'PL',
+  CZE:'CZ',AUT:'AT',SUI:'CH',CHE:'CH',POR:'PT',PRT:'PT',MEX:'MX',ARG:'AR',
+  RSA:'ZA',ZAF:'ZA',IRI:'IR',IRN:'IR',HKG:'HK',TPE:'TW',SGP:'SG',MAS:'MY',
+  MYS:'MY',THA:'TH',INA:'ID',IDN:'ID',PHI:'PH',PHL:'PH',VIE:'VN',VNM:'VN',
+  ISR:'IL',TUR:'TR',GRE:'GR',GRC:'GR',ROU:'RO',BUL:'BG',BGR:'BG',SLO:'SI',
+  SVN:'SI',CRO:'HR',HRV:'HR',SRB:'RS',UKR:'UA',RUS:'RU',BLR:'BY',KAZ:'KZ',
+  UZB:'UZ',COL:'CO',CHI:'CL',CHL:'CL',PER:'PE',VEN:'VE',URU:'UY',URY:'UY',
+  ECU:'EC',PAR:'PY',PRY:'PY',BOL:'BO',EGY:'EG',MAR:'MA',TUN:'TN',ALG:'DZ',
+  DZA:'DZ',NIG:'NG',NGR:'NG',KEN:'KE',ETH:'ET',GHA:'GH',IRL:'IE',ISL:'IS',
+  LTU:'LT',LAT:'LV',LVA:'LV',EST:'EE',SVK:'SK',CYP:'CY',LUX:'LU',MLT:'MT',
+  POR:'PT',
+};
+
+/** 国コード（ISO alpha-3 or alpha-2）を国旗絵文字に変換 */
+export function getCountryFlag(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const code = iso.trim().toUpperCase();
+  const alpha2 = ISO3_TO_ISO2[code] ?? (code.length === 2 ? code : null);
+  if (!alpha2) return '';
+  return [...alpha2].map(c => String.fromCodePoint(c.charCodeAt(0) - 65 + 0x1F1E6)).join('');
+}

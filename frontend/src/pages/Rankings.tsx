@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { api, formatTime, formatDiff } from '../api'
+import { api, formatTime, formatDiff, getCountryFlag } from '../api'
 import type { RankingsDiffResponse } from '../api'
 import './pages.css'
 
@@ -153,7 +153,7 @@ export default function Rankings() {
                         {`${r.first_name} ${r.last_name}`.trim() || r.athlete_id}
                       </Link>
                     </td>
-                    <td>{r.country}</td>
+                    <td><span className="country-flag">{getCountryFlag(r.country)}</span>{r.country}</td>
                     <td className="mono">{formatTime(r.strength)}</td>
                     <td className="mono">{formatTime(r.strength_swim)}</td>
                     <td className="mono">{formatTime(r.strength_t1)}</td>
@@ -207,7 +207,7 @@ export default function Rankings() {
                           {`${e.first_name} ${e.last_name}`.trim() || e.athlete_id}
                         </Link>
                       </td>
-                      <td>{e.country}</td>
+                      <td><span className="country-flag">{getCountryFlag(e.country)}</span>{e.country}</td>
                       <td className="mono">{formatTime(e.strength_after)}</td>
                       <td className="mono">
                         {e.strength_change == null ? '—' : (
