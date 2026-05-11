@@ -7,6 +7,7 @@ import AthleteDetail from './pages/AthleteDetail'
 import Predict from './pages/Predict'
 import Admin from './pages/Admin'
 import Guide from './pages/Guide'
+import WorldRanking from './pages/WorldRanking'
 
 function App() {
   return (
@@ -29,6 +30,9 @@ function App() {
           <NavLink to="/admin" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             レース結果アップロード
           </NavLink>
+          <NavLink to="/world-ranking" className={({ isActive }) => isActive ? 'nav-link nav-link-dev active' : 'nav-link nav-link-dev'}>
+            世界ランク試算
+          </NavLink>
         </nav>
       </header>
 
@@ -41,6 +45,7 @@ function App() {
           <Route path="/athletes/:athleteId" element={<AthleteDetail />} />
           <Route path="/predict" element={<Predict />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/world-ranking" element={<WorldRanking />} />
         </Routes>
       </main>
     </div>
