@@ -132,4 +132,36 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-11: Webからのレース結果アップロード機能・公開URL追加
+**コミット:** `（このコミット）`
+**ブランチ:** main
+
+### 変更内容
+- `app/models.py`: `Race`モデルに`points`フィールド（優勝ポイント）を追加
+- `app/database.py`: 起動時に`points`カラムをALTER TABLEで自動マイグレーション
+- `app/routers/admin.py`: アップロードエンドポイントに大会名・日付・ポイント・補足のFormフィールドを追加。ポイントの範囲バリデーション（150〜750）も実装
+- `app/services/import_excel.py`: メタデータをRaceレコードに保存する処理を追加
+- `frontend/src/api.ts`: `uploadRaceResult`関数を追加（FormDataで全フィールドを送信）
+- `frontend/src/pages/Admin.tsx`: アップロードフォームページを新規作成
+- `frontend/src/App.tsx`: `/admin`ルートとナビリンク「アップロード」を追加
+- `frontend/src/pages/pages.css`: フォームUI用のスタイルを追加
+- `README.md`: 公開URLを追記
+
+### 変更意図・背景
+ローカルのSwagger UIでしかデータ投入できなかったのを、フロントエンドのUIから
+直接アップロードできるようにした。大会情報（名前・日付・ポイント・補足）を
+Excelと一緒に登録することで、レース一覧での表示情報を充実させる。
+
+### 技術的決定事項
+- DBマイグレーションはAlembicを使わず`ALTER TABLE ... ADD COLUMN`を起動時に実行する
+  シンプルな方式を採用。個人開発規模では十分で、複雑な依存関係を避けられる。
+- `uploadApi`を`file: File`から`form: FormData`を受け取る汎用形式に変更し、
+  ファイル以外のフィールドも送れるようにした。
+
+### 残課題・次のステップ
+- 既存のRenderにデプロイされているデータには`points`がNULLのまま。
+  アップロードページから再アップロードすることで補完可能。
+
+---
+
 ## 今後の記録はここより上に追記

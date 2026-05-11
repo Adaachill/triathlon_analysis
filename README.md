@@ -2,6 +2,14 @@
 
 レース結果を分析し、選手の強さを標準化タイムで評価するシステム。
 
+## 公開URL
+
+| 役割 | URL |
+|---|---|
+| フロントエンド（GitHub Pages） | https://adaachill.github.io/triathlon_analysis/ |
+| バックエンドAPI（Render） | https://triathlon-analysis.onrender.com/ |
+| APIドキュメント（Swagger） | https://triathlon-analysis.onrender.com/docs |
+
 ## 構成
 
 - **バックエンド**: FastAPI (Python)

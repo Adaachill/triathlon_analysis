@@ -37,20 +37,33 @@ def time_to_seconds(value) -> int | None:
     return h * 3600 + m * 60 + sec
 
 
-def import_excel_file(path: str, session: Session) -> dict:
+def import_excel_file(
+    path: str,
+    session: Session,
+    race_name: str = "",
+    race_date_str: str = "",
+    points: int | None = None,
+    note: str = "",
+) -> dict:
     """Excelファイルを読み込んでDBにインポート（最初のシートのみ）"""
-    # sheet_name=0 で最初のシートのみを読み込む（2つ目以降のシートは無視）
+    from datetime import date as date_type
+
     df = pd.read_excel(path, sheet_name=0)
 
-    # フォーマットチェック
     missing = [c for c in EXPECTED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"Columns missing in {path}: {missing}")
 
-    # Event IDはこのファイル全行で同じと想定
     event_id = str(df["Event ID"].iloc[0])
 
-    # Raceを取得 or 作成
+    parsed_date: date_type | None = None
+    if race_date_str:
+        try:
+            parsed_date = date_type.fromisoformat(race_date_str)
+        except ValueError:
+            pass
+
+    # Raceを取得 or 作成し、メタデータを上書き
     race = session.exec(
         select(Race).where(Race.event_id == event_id)
     ).first()
@@ -59,8 +72,18 @@ def import_excel_file(path: str, session: Session) -> dict:
         if event_id == REFERENCE_EVENT_ID:
             race.is_reference = True
         session.add(race)
-        session.commit()
-        session.refresh(race)
+
+    if race_name:
+        race.name = race_name
+    if parsed_date:
+        race.date = parsed_date
+    if points is not None:
+        race.points = points
+    if note:
+        race.note = note
+
+    session.commit()
+    session.refresh(race)
 
     # 既存結果を削除
     session.exec(delete(Result).where(Result.race_id == race.id))

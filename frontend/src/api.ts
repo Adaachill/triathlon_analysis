@@ -18,12 +18,10 @@ async function fetchApi<T>(path: string, params?: Record<string, string>): Promi
   return res.json();
 }
 
-async function uploadApi<T>(path: string, file: File): Promise<T> {
+async function uploadApi<T>(path: string, form: FormData): Promise<T> {
   const pathStr = path.startsWith('/') ? path.slice(1) : path;
   const base = API_BASE.startsWith('http') ? API_BASE : window.location.origin + API_BASE;
   const url = new URL(pathStr, base.endsWith('/') ? base : base + '/');
-  const form = new FormData();
-  form.append('file', file);
   const res = await fetch(url.toString(), { method: 'POST', body: form });
   if (!res.ok) {
     const detail = await res.json().then((j) => j.detail ?? '').catch(() => '');
@@ -267,8 +265,29 @@ export const api = {
     fetchApi<PredictResponse>('/predict/2026-devonport'),
   getPredictUploaded: () =>
     fetchApi<PredictResponse>('/predict/uploaded-startlist'),
-  uploadStartlist: (file: File) =>
-    uploadApi<PredictResponse>('/predict/upload-startlist', file),
+  uploadStartlist: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return uploadApi<PredictResponse>('/predict/upload-startlist', form);
+  },
+  uploadRaceResult: (params: {
+    file: File;
+    race_name: string;
+    race_date: string;
+    points: number;
+    note: string;
+  }) => {
+    const form = new FormData();
+    form.append('file', params.file);
+    form.append('race_name', params.race_name);
+    form.append('race_date', params.race_date);
+    form.append('points', String(params.points));
+    form.append('note', params.note);
+    return uploadApi<{ message: string; race_id: number; event_id: string; added_results: number }>(
+      '/admin/upload_excel',
+      form,
+    );
+  },
 };
 
 /** 秒数を mm:ss 形式に */

@@ -13,8 +13,16 @@ engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
 
 
 def init_db() -> None:
-    """データベーステーブルを作成"""
+    """データベーステーブルを作成し、カラム追加マイグレーションを実行"""
+    from sqlalchemy import inspect, text
     SQLModel.metadata.create_all(engine)
+    insp = inspect(engine)
+    if "race" in insp.get_table_names():
+        existing = [c["name"] for c in insp.get_columns("race")]
+        if "points" not in existing:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE race ADD COLUMN points INTEGER"))
+                conn.commit()
 
 
 def get_session():

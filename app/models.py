@@ -8,6 +8,7 @@ class Race(SQLModel, table=True):
     date: date_ | None = Field(default=None, index=True)
     location: str | None = Field(default=None)
     is_reference: bool = Field(default=False, index=True)
+    points: int | None = Field(default=None)
     note: str | None = Field(default=None)
 
 class Result(SQLModel, table=True):
