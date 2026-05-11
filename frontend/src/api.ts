@@ -365,7 +365,6 @@ const ISO3_TO_ISO2: Record<string, string> = {
   ECU:'EC',PAR:'PY',PRY:'PY',BOL:'BO',EGY:'EG',MAR:'MA',TUN:'TN',ALG:'DZ',
   DZA:'DZ',NIG:'NG',NGR:'NG',KEN:'KE',ETH:'ET',GHA:'GH',IRL:'IE',ISL:'IS',
   LTU:'LT',LAT:'LV',LVA:'LV',EST:'EE',SVK:'SK',CYP:'CY',LUX:'LU',MLT:'MT',
-  POR:'PT',
 };
 
 /** 国コード（ISO alpha-3 or alpha-2）を国旗絵文字に変換 */

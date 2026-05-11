@@ -185,11 +185,11 @@ function CumulativeSegChart({ results }: { results: RaceResult[] }) {
                   {i === step && (
                     <LabelList
                       position="top"
-                      content={(props: Record<string, unknown>) => {
-                        const x = props.x as number
-                        const y = props.y as number
-                        const width = props.width as number
-                        const index = props.index as number
+                      content={(props) => {
+                        const x = (props as unknown as Record<string, unknown>).x as number
+                        const y = (props as unknown as Record<string, unknown>).y as number
+                        const width = (props as unknown as Record<string, unknown>).width as number
+                        const index = (props as unknown as Record<string, unknown>).index as number
                         if (index == null || !top15[index]) return null
                         const r = top15[index]
                         let total = 0
