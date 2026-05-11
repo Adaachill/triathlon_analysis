@@ -117,9 +117,10 @@ function AthleteCumulativeChart({ races }: { races: AthleteRace[] }) {
                   isAnimationActive animationDuration={500} animationEasing="ease-out"
                   radius={i === step ? [4, 4, 0, 0] : i === 0 ? [0, 0, 4, 4] : undefined}>
                   {i === step && (
-                    <LabelList position="top" content={(props: Record<string, unknown>) => {
-                      const x = props.x as number, y = props.y as number, width = props.width as number
-                      const index = props.index as number
+                    <LabelList position="top" content={(props) => {
+                      const p = props as unknown as Record<string, unknown>
+                      const x = p.x as number, y = p.y as number, width = p.width as number
+                      const index = p.index as number
                       if (index == null || !sorted[index]) return null
                       const r = sorted[index]
                       let total = 0
