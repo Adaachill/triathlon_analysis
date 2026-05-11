@@ -250,6 +250,36 @@ export interface PredictResponse {
   devonport_difficulties: Record<string, Record<string, number | null>>;
 }
 
+export interface WorldRankingRace {
+  race_id: number;
+  race_name: string | null;
+  date: string;
+  points: number;
+}
+
+export interface WorldRankingEntry {
+  athlete_id: string;
+  first_name: string;
+  last_name: string;
+  country: string;
+  total_points: number;
+  period1_points: number;
+  period2_points_raw: number;
+  period2_points: number;
+  period1_races: WorldRankingRace[];
+  period2_races: WorldRankingRace[];
+}
+
+export interface WorldRankingResponse {
+  program_name: string;
+  as_of_date: string;
+  period1_start: string;
+  period1_end: string;
+  period2_start: string;
+  period2_end: string;
+  rankings: WorldRankingEntry[];
+}
+
 export const api = {
   getPrograms: () => fetchApi<Program>('/programs'),
   getRaces: () => fetchApi<Race[]>('/races'),
@@ -268,6 +298,8 @@ export const api = {
     form.append('file', file);
     return uploadApi<PredictResponse>('/predict/upload-startlist', form);
   },
+  getWorldRanking: (programName: string, asOfDate: string) =>
+    fetchApi<WorldRankingResponse>('/world-ranking', { program_name: programName, as_of_date: asOfDate }),
   uploadRaceResult: (params: {
     file: File;
     race_name: string;

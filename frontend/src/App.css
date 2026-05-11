@@ -50,6 +50,23 @@
   font-weight: 700;
 }
 
+.nav-link-dev {
+  color: #92400e !important;
+  font-size: 0.82rem;
+  opacity: 0.75;
+}
+
+.nav-link-dev:hover {
+  opacity: 1;
+  background: rgba(234, 179, 8, 0.1) !important;
+  color: #92400e !important;
+}
+
+.nav-link-dev.active {
+  background: rgba(234, 179, 8, 0.15) !important;
+  color: #92400e !important;
+}
+
 .main {
   flex: 1;
   padding: 1.5rem;
