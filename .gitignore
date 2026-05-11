@@ -8,6 +8,7 @@ env/
 venv/
 ENV/
 .venv
+.venv311
 
 # Database
 *.db
@@ -20,7 +21,7 @@ ENV/
 *.swp
 *.swo
 # clause
-.claude
+.claude/
 
 # OS
 .DS_Store
@@ -29,3 +30,4 @@ Thumbs.db
 # Project specific
 raw_excel/*.xlsx
 raw_excel/*.xls
+raw_excel/.~lock.*
