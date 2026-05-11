@@ -30,6 +30,21 @@ async function uploadApi<T>(path: string, form: FormData): Promise<T> {
   return res.json();
 }
 
+async function postQueryApi<T>(path: string, params?: Record<string, string>): Promise<T> {
+  const pathStr = path.startsWith('/') ? path.slice(1) : path;
+  const base = API_BASE.startsWith('http') ? API_BASE : window.location.origin + API_BASE;
+  const url = new URL(pathStr, base.endsWith('/') ? base : base + '/');
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  }
+  const res = await fetch(url.toString(), { method: 'POST' });
+  if (!res.ok) {
+    const detail = await res.json().then((j) => j.detail ?? '').catch(() => '');
+    throw new Error(detail || `API Error: ${res.status} ${path}`);
+  }
+  return res.json();
+}
+
 async function patchApi<T>(path: string, body: object): Promise<T> {
   const pathStr = path.startsWith('/') ? path.slice(1) : path;
   const base = API_BASE.startsWith('http') ? API_BASE : window.location.origin + API_BASE;
@@ -325,6 +340,29 @@ export async function getUpcomingEvents(daysAhead = 365): Promise<AlgoliaEvent[]
   return hits.sort((a, b) => a.start_date.localeCompare(b.start_date));
 }
 
+export interface WtParaEvent {
+  id: number;
+  name: string;
+  start_date: string;
+  city: string | null;
+  country_name: string;
+  event_categories: string[];
+  win_points: number | null;
+  imported: boolean;
+}
+
+export interface WtParaEventsResponse {
+  events: WtParaEvent[];
+}
+
+export interface WtImportResult {
+  message: string;
+  race_id: number;
+  event_id: string;
+  added_results: number;
+  skipped: boolean;
+}
+
 export interface EvalModelStat {
   mae_sec: number;
   rmse_sec: number;
@@ -381,6 +419,23 @@ export const api = {
       form,
     );
   },
+  getWtParaEvents: (yearsBack = 3) =>
+    fetchApi<WtParaEventsResponse>('/admin/wt/para-events', { years_back: String(yearsBack) }),
+  importWtEvent: (params: {
+    id: number;
+    win_points: number;
+    race_name: string;
+    race_date: string;
+    note?: string;
+    force?: boolean;
+  }) =>
+    postQueryApi<WtImportResult>(`/admin/wt/import/${params.id}`, {
+      win_points: String(params.win_points),
+      race_name: params.race_name,
+      race_date: params.race_date,
+      note: params.note ?? '',
+      force: String(params.force ?? false),
+    }),
 };
 
 /** 秒数を mm:ss 形式に */

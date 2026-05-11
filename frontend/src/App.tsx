@@ -9,6 +9,7 @@ import Predict from './pages/Predict'
 import Admin from './pages/Admin'
 import Guide from './pages/Guide'
 import WorldRanking from './pages/WorldRanking'
+import WtImport from './pages/WtImport'
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -46,6 +47,9 @@ function App() {
       </NavLink>
       <NavLink to="/admin" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
         📤 レース結果アップロード
+      </NavLink>
+      <NavLink to="/admin/wt-import" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+        WT大会インポート
       </NavLink>
       <NavLink to="/world-ranking" className={({ isActive }) => isActive ? 'nav-link nav-link-dev active' : 'nav-link nav-link-dev'}>
         🌍 世界ランク試算
@@ -92,6 +96,7 @@ function App() {
           <Route path="/athletes/:athleteId" element={<AthleteDetail />} />
           <Route path="/predict" element={<Predict />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/admin/wt-import" element={<WtImport />} />
           <Route path="/world-ranking" element={<WorldRanking />} />
         </Routes>
       </main>
