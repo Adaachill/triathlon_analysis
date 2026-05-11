@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 from app.database import init_db
 from app.deps import get_db
 from app.models import Result
-from app.routers import admin, races, athletes, rankings, predict, world_ranking
+from app.routers import admin, races, athletes, rankings, predict, world_ranking, wt_import
 
 app = FastAPI(
     title="Triathlon Analysis API",
@@ -29,6 +29,7 @@ app.include_router(athletes.router)
 app.include_router(rankings.router)
 app.include_router(predict.router)
 app.include_router(world_ranking.router)
+app.include_router(wt_import.router)
 
 
 @app.on_event("startup")
