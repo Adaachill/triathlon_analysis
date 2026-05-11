@@ -48,9 +48,26 @@ npm run dev
 
 3. http://localhost:5173 でUIを確認
 
-### GitHub Pages デプロイ
+### 本番デプロイ（Neon + Render + GitHub Pages）
 
-1. バックエンドを Render 等にデプロイし、APIのURLを取得
-2. リポジトリの Settings → Secrets に `VITE_API_URL` を登録
-3. `main` ブランチに push で GitHub Actions が自動ビルド・デプロイ
-4. Settings → Pages で "GitHub Actions" をデプロイ元に選択
+#### 1. Neon（PostgreSQL）
+1. [neon.tech](https://neon.tech) でプロジェクトを作成（リージョン: Singapore）
+2. 接続文字列をコピー（`postgresql://...`形式）
+
+#### 2. Render（バックエンド）
+1. [render.com](https://render.com) で **New → Web Service** を作成
+2. このリポジトリを選択（`render.yaml` が自動検出される）
+3. Region: **Singapore**、Plan: **Free**
+4. 環境変数 `DATABASE_URL` にNeonの接続文字列を設定してデプロイ
+5. デプロイ完了後のURL（`https://xxxx.onrender.com`）をメモ
+
+#### 3. GitHub（フロントエンド）
+1. Settings → **Pages** → Source を **"GitHub Actions"** に設定
+2. Settings → **Secrets and variables → Actions** → **New repository secret**
+   - Name: `VITE_API_URL`
+   - Value: RenderのURL（例: `https://xxxx.onrender.com`）
+3. Actions タブ → "Deploy to GitHub Pages" → **Run workflow** で初回デプロイ
+   - 以降は `main` ブランチへの push で自動デプロイ
+
+#### 4. データ投入
+Renderデプロイ後、`https://xxxx.onrender.com/docs` から `POST /admin/upload_excel` でExcelをアップロード。
