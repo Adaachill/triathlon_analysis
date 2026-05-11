@@ -48,7 +48,7 @@ export default function WorldRanking() {
     <div className="wr-page">
       {/* 開発中バナー */}
       <div className="wr-dev-banner">
-        ⚠️ このページは開発中です。計算結果は参考値であり、公式のWorld Triathlon世界ランキングとは異なる場合があります。
+        ⚠️ 世界ランキング（開発中）：このページは開発中です。計算結果は参考値であり、公式のWorld Triathlon世界ランキングとは異なる場合があります。
       </div>
 
       <div className="card">
@@ -81,10 +81,10 @@ export default function WorldRanking() {
         {data && (
           <div className="wr-period-info">
             <span className="wr-period-chip wr-period1">
-              直近1年（全ポイント）: {data.period1_start} 〜 {data.period1_end}
+              Current（全ポイント）: {data.current_start} 〜 {data.current_end}
             </span>
             <span className="wr-period-chip wr-period2">
-              その前の1年（×1/3）: {data.period2_start} 〜 {data.period2_end}
+              Previous（×1/3）: {data.previous_start} 〜 {data.previous_end}
             </span>
           </div>
         )}
@@ -105,8 +105,8 @@ export default function WorldRanking() {
                   <th>選手名</th>
                   <th>国</th>
                   <th className="col-total-highlight">合計ポイント</th>
-                  <th>直近1年</th>
-                  <th>前年（×1/3）</th>
+                  <th>Current</th>
+                  <th>Previous</th>
                 </tr>
               </thead>
               <tbody>
