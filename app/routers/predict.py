@@ -1,6 +1,5 @@
-"""2026 Devonport 予想タイム・順位 API"""
+"""予想タイム・順位 API"""
 from io import BytesIO
-from pathlib import Path
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -11,12 +10,6 @@ from app.models import Race
 from app.services.als_optimizer import get_optimized_program
 
 router = APIRouter(prefix="/predict", tags=["predict"])
-
-# ── パス定数 ──────────────────────────────────────────────────────────────────
-UPLOAD_DIR = Path(__file__).parent.parent.parent / "raw_excel"
-DEFAULT_STARTLIST_PATH = UPLOAD_DIR / "event_startlist_195131.xlsx"
-# アップロードされたスタートリストの保存先（最新1件を上書き保存）
-UPLOADED_STARTLIST_PATH = UPLOAD_DIR / "uploaded_startlist_latest.xlsx"
 
 DEVONPORT_2025_EVENT_ID = "194210"
 
@@ -41,30 +34,8 @@ PROGRAM_ORDER = [
 _SEGS = ["swim", "t1", "bike", "t2", "run"]
 
 
-# ── ストレージ抽象化 ──────────────────────────────────────────────────────────
-def _save_uploaded_startlist(content: bytes) -> Path:
-    """
-    アップロードされたスタートリストを保存する。
-
-    【現在（ローカル開発）】
-        raw_excel/uploaded_startlist_latest.xlsx に上書き保存。
-
-    【将来（本番環境）への変更方法】
-        1. この関数の実装をクラウドストレージ（AWS S3, GCS 等）への
-           アップロードに置き換える。
-        2. 戻り値を Path の代わりにダウンロード用の一時 URL (str) にする。
-        3. 呼び出し側 (_parse_startlist) の引数型を Union[Path, str] にし、
-           str の場合は requests.get() / boto3 等でダウンロードして BytesIO で読む。
-        4. DB にアップロード履歴（ファイル名・日時・URL）を保存すれば
-           複数のスタートリストを切り替えられるようになる。
-    """
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    UPLOADED_STARTLIST_PATH.write_bytes(content)
-    return UPLOADED_STARTLIST_PATH
-
-
 # ── スタートリスト解析 ────────────────────────────────────────────────────────
-def _parse_startlist(source: Path | BytesIO) -> list[dict]:
+def _parse_startlist(source: BytesIO) -> list[dict]:
     """
     Excel（Path または BytesIO）からスタートリストを解析する。
 
@@ -76,7 +47,7 @@ def _parse_startlist(source: Path | BytesIO) -> list[dict]:
       - プログラム: "Program Name"
       - スタート番号: "Start Number"
     """
-    df = pd.read_excel(source if isinstance(source, BytesIO) else str(source))
+    df = pd.read_excel(source)
     athletes = []
     for _, row in df.iterrows():
         pname = str(row.get("Program Name", "")).strip()
@@ -187,16 +158,6 @@ def _compute_predictions(startlist: list[dict], session: Session) -> dict:
 
 
 # ── エンドポイント ─────────────────────────────────────────────────────────────
-@router.get("/2026-devonport")
-async def predict_devonport(session: Session = Depends(get_db)):
-    """取込済スタートリスト（event_startlist_195131.xlsx）から予想タイム・順位を返す"""
-    startlist = _parse_startlist(DEFAULT_STARTLIST_PATH)
-    result = _compute_predictions(startlist, session)
-    result["source_label"] = "2026 Devonport（取込済スタートリスト）"
-    result["source_filename"] = DEFAULT_STARTLIST_PATH.name
-    return result
-
-
 @router.post("/upload-startlist")
 async def upload_startlist(
     file: UploadFile = File(...),
@@ -204,21 +165,15 @@ async def upload_startlist(
 ):
     """
     スタートリスト Excel をアップロードして予想タイム・順位を返す。
+    ファイルはメモリ上でのみ処理し、サーバーには保存しない。
 
-    受け付けるフォーマット:
-      - .xlsx のみ
-      - カラム: "Member ID"（または "Athlete ID"）, "First Name", "Last Name",
-                "Country", "Program Name", "Start Number"
+    対応カラム: "Member ID"（または "Athlete ID"）, "First Name", "Last Name",
+               "Country", "Program Name", "Start Number"
     """
     if not (file.filename or "").endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="xlsx ファイルのみ受け付けます")
 
     content = await file.read()
-
-    # ファイルを保存（将来: クラウドストレージへ変更 → _save_uploaded_startlist 参照）
-    saved_path = _save_uploaded_startlist(content)
-
-    # BytesIO から直接解析（保存済みファイルを再読みしても同じ）
     try:
         startlist = _parse_startlist(BytesIO(content))
     except Exception as e:
@@ -233,16 +188,4 @@ async def upload_startlist(
     result = _compute_predictions(startlist, session)
     result["source_label"] = f"アップロード: {file.filename}"
     result["source_filename"] = file.filename
-    return result
-
-
-@router.get("/uploaded-startlist")
-async def predict_uploaded(session: Session = Depends(get_db)):
-    """最後にアップロードされたスタートリストから予想タイム・順位を返す"""
-    if not UPLOADED_STARTLIST_PATH.exists():
-        raise HTTPException(status_code=404, detail="アップロード済みのスタートリストがありません")
-    startlist = _parse_startlist(UPLOADED_STARTLIST_PATH)
-    result = _compute_predictions(startlist, session)
-    result["source_label"] = f"アップロード: {UPLOADED_STARTLIST_PATH.name}"
-    result["source_filename"] = UPLOADED_STARTLIST_PATH.name
     return result

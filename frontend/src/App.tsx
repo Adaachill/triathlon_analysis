@@ -22,7 +22,7 @@ function App() {
             予想リザルト
           </NavLink>
           <NavLink to="/admin" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            アップロード
+            レース結果アップロード
           </NavLink>
         </nav>
         <h1 className="logo">Triathlon Analysis</h1>

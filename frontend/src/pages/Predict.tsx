@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useRef, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { api, formatTime, formatDiff } from '../api'
 import type { PredictAthlete, PredictSegTimes, PredictResponse } from '../api'
 import './pages.css'
 
 type DiffMode = 'avg' | 'devonport'
-type SourceMode = 'fixed' | 'uploaded'
 
 const PROGRAM_ORDER = [
   'PTWC Men', 'PTWC Women',
@@ -32,50 +31,14 @@ function getRank(a: PredictAthlete, mode: DiffMode): number | null {
 }
 
 export default function Predict() {
-  const [fixedData, setFixedData]       = useState<PredictResponse | null>(null)
-  const [uploadedData, setUploadedData] = useState<PredictResponse | null>(null)
-  const [sourceMode, setSourceMode]     = useState<SourceMode>('fixed')
-  const [diffMode, setDiffMode]         = useState<DiffMode>('devonport')
+  const [data, setData]             = useState<PredictResponse | null>(null)
+  const [diffMode, setDiffMode]     = useState<DiffMode>('devonport')
   const [activeCategory, setActiveCategory] = useState<string>('')
-  const [expanded, setExpanded]         = useState<Set<string>>(new Set())
-
-  const [loading, setLoading]     = useState(true)
-  const [uploading, setUploading] = useState(false)
+  const [expanded, setExpanded]     = useState<Set<string>>(new Set())
+  const [uploading, setUploading]   = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const [error, setError]         = useState<string | null>(null)
-
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // 起動時: 取込済スタートリスト + アップロード済みがあれば同時取得
-  useEffect(() => {
-    const p1 = api.getPredictDevonport()
-      .then((res) => {
-        setFixedData(res)
-        const first = PROGRAM_ORDER.find((p) => p in res.categories)
-        if (first) setActiveCategory(first)
-      })
-      .catch((e) => setError(e.message))
-
-    // 既存アップロード済みがあれば取得（404 は無視）
-    const p2 = api.getPredictUploaded()
-      .then(setUploadedData)
-      .catch(() => {/* アップロード未済の場合は無視 */})
-
-    Promise.all([p1, p2]).finally(() => setLoading(false))
-  }, [])
-
-  // ソース切替時にカテゴリをリセット
-  const switchSource = (mode: SourceMode) => {
-    setSourceMode(mode)
-    setExpanded(new Set())
-    const data = mode === 'fixed' ? fixedData : uploadedData
-    if (data) {
-      const first = PROGRAM_ORDER.find((p) => p in data.categories)
-      if (first) setActiveCategory(first)
-    }
-  }
-
-  // ファイルアップロード
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -83,8 +46,7 @@ export default function Predict() {
     setUploadError(null)
     try {
       const res = await api.uploadStartlist(file)
-      setUploadedData(res)
-      setSourceMode('uploaded')
+      setData(res)
       setExpanded(new Set())
       const first = PROGRAM_ORDER.find((p) => p in res.categories)
       if (first) setActiveCategory(first)
@@ -92,28 +54,9 @@ export default function Predict() {
       setUploadError(err instanceof Error ? err.message : 'アップロードに失敗しました')
     } finally {
       setUploading(false)
-      // ファイル選択をリセット（同じファイルを再アップできるように）
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
-
-  if (loading) return <div className="loading">読み込み中...</div>
-  if (error)   return <div className="error">{error}</div>
-
-  const data = sourceMode === 'fixed' ? fixedData : uploadedData
-  if (!data) return null
-
-  const availablePrograms = PROGRAM_ORDER.filter((p) => p in data.categories)
-  const athletes = activeCategory ? (data.categories[activeCategory] ?? []) : []
-
-  const sorted = [
-    ...athletes
-      .filter((a) => getRank(a, diffMode) != null)
-      .sort((a, b) => (getRank(a, diffMode) ?? 999) - (getRank(b, diffMode) ?? 999)),
-    ...athletes.filter((a) => getRank(a, diffMode) == null),
-  ]
-
-  const devDiff = data.devonport_difficulties[activeCategory] ?? {}
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -123,45 +66,25 @@ export default function Predict() {
     })
   }
 
-  return (
-    <div className="predict-page">
-      <div className="card">
-        <div className="page-header">
-          <h2>予想リザルト</h2>
-        </div>
-        <p className="desc">
-          スタートリスト登録選手のALS強度とコース難易度から予想タイム・順位を算出しています。
-          履歴なしの選手は予想不可（末尾表示）。
-        </p>
-
-        {/* ── スタートリストソース選択 ── */}
-        <div className="predict-source-row">
-          <div className="predict-diff-tabs">
-            <button
-              className={`predict-diff-tab${sourceMode === 'fixed' ? ' active' : ''}`}
-              onClick={() => switchSource('fixed')}
-            >
-              {fixedData?.source_filename ?? '取込済スタートリスト'}
-            </button>
-            <button
-              className={`predict-diff-tab${sourceMode === 'uploaded' ? ' active' : ''}`}
-              onClick={() => uploadedData ? switchSource('uploaded') : fileInputRef.current?.click()}
-              title={uploadedData ? uploadedData.source_label : 'クリックしてアップロード'}
-            >
-              {uploadedData
-                ? uploadedData.source_filename
-                : 'スタートリストをアップロード'}
-            </button>
+  // ── アップロード前の初期画面 ──
+  if (!data) {
+    return (
+      <div className="predict-page">
+        <div className="card">
+          <div className="page-header">
+            <h2>予想リザルト</h2>
           </div>
-
-          {/* アップロードボタン */}
+          <p className="desc">
+            スタートリスト（.xlsx）をアップロードすると、ALS強度とコース難易度から
+            各選手の予想タイム・予想順位を算出します。
+          </p>
           <div className="predict-upload-area">
             <button
               className="btn-upload"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
             >
-              {uploading ? '読み込み中...' : '📂 xlsx をアップロード'}
+              {uploading ? '読み込み中...' : '📂 スタートリスト（.xlsx）をアップロード'}
             </button>
             <input
               ref={fileInputRef}
@@ -170,18 +93,54 @@ export default function Predict() {
               style={{ display: 'none' }}
               onChange={handleFileChange}
             />
-            {uploadError && (
-              <span className="upload-error">{uploadError}</span>
-            )}
+            {uploadError && <p className="upload-error">{uploadError}</p>}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── アップロード後の結果画面 ──
+  const availablePrograms = PROGRAM_ORDER.filter((p) => p in data.categories)
+  const athletes = activeCategory ? (data.categories[activeCategory] ?? []) : []
+  const sorted = [
+    ...athletes
+      .filter((a) => getRank(a, diffMode) != null)
+      .sort((a, b) => (getRank(a, diffMode) ?? 999) - (getRank(b, diffMode) ?? 999)),
+    ...athletes.filter((a) => getRank(a, diffMode) == null),
+  ]
+  const devDiff = data.devonport_difficulties[activeCategory] ?? {}
+
+  return (
+    <div className="predict-page">
+      <div className="card">
+        <div className="page-header">
+          <h2>予想リザルト</h2>
+          {/* 再アップロードボタン */}
+          <div className="predict-upload-area" style={{ margin: 0 }}>
+            <button
+              className="btn-upload"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? '読み込み中...' : '📂 別ファイルをアップロード'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx"
+              style={{ display: 'none' }}
+              onChange={handleFileChange}
+            />
           </div>
         </div>
 
-        {/* 現在のソース表示 */}
         <p className="predict-source-label">
           表示中: <strong>{data.source_label}</strong>
         </p>
+        {uploadError && <p className="upload-error">{uploadError}</p>}
 
-        {/* ── カテゴリタブ ── */}
+        {/* カテゴリタブ */}
         <div className="predict-cat-tabs">
           {availablePrograms.map((p) => (
             <button
@@ -194,7 +153,7 @@ export default function Predict() {
           ))}
         </div>
 
-        {/* ── 難易度モードタブ ── */}
+        {/* 難易度モードタブ */}
         <div className="predict-diff-tabs">
           <button
             className={`predict-diff-tab${diffMode === 'devonport' ? ' active' : ''}`}
@@ -230,12 +189,12 @@ export default function Predict() {
                 })}
               </>
             ) : (
-              <span className="difficulty-na">このカテゴリの2025 Devonport 難易度データなし（平均コースと同値）</span>
+              <span className="difficulty-na">このカテゴリのDevonport 2025難易度データなし（平均コースと同値）</span>
             )}
           </div>
         )}
 
-        {/* ── 結果テーブル ── */}
+        {/* 結果テーブル */}
         <div className="table-wrap">
           <table className="data-table">
             <thead>
@@ -254,10 +213,10 @@ export default function Predict() {
             </thead>
             <tbody>
               {sorted.map((a) => {
-                const pred    = getPred(a, diffMode)
-                const rank    = getRank(a, diffMode)
-                const isExp   = expanded.has(a.athlete_id)
-                const canExp  = a.has_history
+                const pred   = getPred(a, diffMode)
+                const rank   = getRank(a, diffMode)
+                const isExp  = expanded.has(a.athlete_id)
+                const canExp = a.has_history
 
                 return (
                   <Fragment key={a.athlete_id}>

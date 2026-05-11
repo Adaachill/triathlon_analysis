@@ -263,10 +263,6 @@ export const api = {
     fetchApi<RankingsDiffResponse>('/rankings/diff', { program_name: programName, new_race_id: String(newRaceId) }),
   getAthlete: (athleteId: string, programName: string) =>
     fetchApi<AthleteDetail>(`/athletes/${athleteId}`, { program_name: programName }),
-  getPredictDevonport: () =>
-    fetchApi<PredictResponse>('/predict/2026-devonport'),
-  getPredictUploaded: () =>
-    fetchApi<PredictResponse>('/predict/uploaded-startlist'),
   uploadStartlist: (file: File) => {
     const form = new FormData();
     form.append('file', file);
