@@ -3,7 +3,7 @@ from sqlmodel import SQLModel, Field
 
 class Race(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    event_id: str = Field(index=True)
+    event_id: str = Field(index=True, unique=True)
     name: str | None = Field(default=None)
     date: date_ | None = Field(default=None, index=True)
     location: str | None = Field(default=None)
