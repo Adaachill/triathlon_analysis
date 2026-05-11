@@ -110,6 +110,9 @@ def import_excel_file(
         )
     # 削除と追加を同一トランザクションにまとめる（中間コミットしない）
 
+    # PT系カテゴリのみ対象（"PT"で始まらないプログラムはスキップ）
+    df = df[df["Program Name"].astype(str).str.startswith("PT")]
+
     # 行ごとにResultを追加
     added_count = 0
     for _, row in df.iterrows():

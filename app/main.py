@@ -54,5 +54,5 @@ async def list_programs(session: Session = Depends(get_db)):
         Result.total_sec.isnot(None),
     ).limit(1000)
     results = session.exec(q).all()
-    programs = sorted(set(r.program_name for r in results if r.program_name))
+    programs = sorted(set(r.program_name for r in results if r.program_name and r.program_name.startswith("PT")))
     return {"programs": programs}
