@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { api, formatTime, formatDiff } from '../api'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts'
+import { api, formatTime, formatDiff, getCountryFlag } from '../api'
 import type { RaceResult } from '../api'
 import './pages.css'
 
@@ -49,6 +49,7 @@ function CumulativeSegChart({ results }: { results: RaceResult[] }) {
     top15.map((r) => {
       const entry: Record<string, number | string> = {
         name: r.last_name || r.athlete_id,
+        athleteId: r.athlete_id,
       }
       SEG_CONFIG.forEach((seg, i) => {
         entry[seg.key as string] = i <= step ? ((r[seg.key] as number | null) ?? 0) : 0
@@ -57,6 +58,27 @@ function CumulativeSegChart({ results }: { results: RaceResult[] }) {
     }),
     [top15, step]
   )
+
+  const checkpointRanks = useMemo(() => {
+    const totals = top15.map((r) => {
+      let cum = 0
+      for (let i = 0; i <= step; i++) cum += (r[SEG_CONFIG[i].key] as number | null) ?? 0
+      return { id: r.athlete_id, cum }
+    })
+    totals.sort((a, b) => a.cum - b.cum)
+    return Object.fromEntries(totals.map((t, i) => [t.id, i + 1]))
+  }, [top15, step])
+
+  const prevCheckpointRanks = useMemo(() => {
+    if (step === 0) return null
+    const totals = top15.map((r) => {
+      let cum = 0
+      for (let i = 0; i <= step - 1; i++) cum += (r[SEG_CONFIG[i].key] as number | null) ?? 0
+      return { id: r.athlete_id, cum }
+    })
+    totals.sort((a, b) => a.cum - b.cum)
+    return Object.fromEntries(totals.map((t, i) => [t.id, i + 1]))
+  }, [top15, step])
 
   const goTo = (newStep: number) => {
     setStep(newStep)
@@ -159,7 +181,42 @@ function CumulativeSegChart({ results }: { results: RaceResult[] }) {
                   animationDuration={500}
                   animationEasing="ease-out"
                   radius={i === step ? [4, 4, 0, 0] : i === 0 ? [0, 0, 4, 4] : undefined}
-                />
+                >
+                  {i === step && (
+                    <LabelList
+                      position="top"
+                      content={(props: Record<string, unknown>) => {
+                        const x = props.x as number
+                        const y = props.y as number
+                        const width = props.width as number
+                        const index = props.index as number
+                        if (index == null || !top15[index]) return null
+                        const r = top15[index]
+                        let total = 0
+                        for (let si = 0; si <= step; si++) {
+                          total += (r[SEG_CONFIG[si].key] as number | null) ?? 0
+                        }
+                        const rank = checkpointRanks[r.athlete_id]
+                        const prevRank = prevCheckpointRanks?.[r.athlete_id]
+                        const rankChanged = prevRank != null && prevRank !== rank
+                        const rankUp = prevRank != null && rank < prevRank
+                        const rankDown = prevRank != null && rank > prevRank
+                        const rankColor = rankUp ? '#16a34a' : rankDown ? '#dc2626' : 'var(--text-muted)'
+                        const cx = x + width / 2
+                        return (
+                          <g>
+                            <text x={cx} y={y - 14} textAnchor="middle" fontSize={9} fontWeight={rankChanged ? 700 : 400} fill={rankColor}>
+                              {rankChanged && (rankUp ? '↑' : '↓')}{rank}位
+                            </text>
+                            <text x={cx} y={y - 3} textAnchor="middle" fontSize={8} fill="var(--text-muted)">
+                              {formatTime(total)}
+                            </text>
+                          </g>
+                        )
+                      }}
+                    />
+                  )}
+                </Bar>
               ))}
             </BarChart>
           </ResponsiveContainer>
@@ -293,6 +350,24 @@ export default function RaceDetail() {
   const hasStandard = difficulty_als != null
   const colSpanBase = 3 + (hasStandard ? 2 : 0)
 
+  // ギャップ計算（実タイムモード時のみ）
+  const gapMap = useMemo(() => {
+    const finished = results
+      .filter((r) => r.status === 'Finished' && r.total_sec != null && r.position != null)
+      .sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+    const map: Record<string, number | null> = {}
+    for (let i = 0; i < finished.length; i++) {
+      if (i === 0) {
+        map[finished[i].athlete_id] = null
+      } else {
+        const prev = finished[i - 1].total_sec ?? 0
+        const cur = finished[i].total_sec ?? 0
+        map[finished[i].athlete_id] = cur - prev
+      }
+    }
+    return map
+  }, [results])
+
   const viewModeOptions: { value: ViewMode; label: string }[] = [
     { value: 'actual', label: '実タイム' },
     { value: 'standard', label: '標準化タイム' },
@@ -423,6 +498,7 @@ export default function RaceDetail() {
                     <th>🔄 T2</th>
                     <th>🏃 Run</th>
                     <th className="col-total-highlight">🏁 合計</th>
+                    <th className="col-gap">Gap</th>
                   </>
                 )}
                 {viewMode === 'standard' && (
@@ -466,7 +542,7 @@ export default function RaceDetail() {
                   return totalActual != null && totalPred != null ? totalActual - totalPred : null
                 })()
 
-                const colSpanTotal = colSpanBase + (viewMode === 'actual' ? 6 : viewMode === 'standard' ? 7 : 6)
+                const colSpanTotal = colSpanBase + (viewMode === 'actual' ? 7 : viewMode === 'standard' ? 7 : 6)
 
                 return (
                   <Fragment key={r.athlete_id}>
@@ -511,7 +587,10 @@ export default function RaceDetail() {
                           {`${r.first_name} ${r.last_name}`.trim() || r.athlete_id}
                         </Link>
                       </td>
-                      <td>{r.country}</td>
+                      <td>
+                        <span className="country-flag">{getCountryFlag(r.country)}</span>
+                        {r.country}
+                      </td>
 
                       {viewMode === 'actual' && (
                         <>
@@ -521,6 +600,12 @@ export default function RaceDetail() {
                           <td className="mono">{formatTime(r.t2_sec)}</td>
                           <td className="mono">{formatTime(r.run_sec)}</td>
                           <td className="mono time-actual-total">{formatTime(r.total_sec)}</td>
+                          <td className="mono col-gap">
+                            {gapMap[r.athlete_id] == null
+                              ? <span className="gap-leader">—</span>
+                              : <span className="gap-value">+{formatTime(gapMap[r.athlete_id])}</span>
+                            }
+                          </td>
                         </>
                       )}
 

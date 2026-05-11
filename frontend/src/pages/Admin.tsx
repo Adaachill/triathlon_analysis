@@ -46,9 +46,14 @@ export default function Admin() {
   return (
     <div className="page">
       <div className="page-header">
-        <h2>レース結果アップロード</h2>
+        <h2>📤 レース結果アップロード</h2>
       </div>
       <p className="desc">Excelファイルと大会情報を入力してアップロードしてください。</p>
+      <div className="upload-note">
+        <strong>⚠️ ファイルの取得方法：</strong>
+        <a href="https://www.triathlon.org/events" target="_blank" rel="noreferrer">WorldTriathlon 大会ページ</a>
+        の対象レースを開き、「Results」タブ →「Download」から <strong>全カテゴリを含む Excel（.xlsx）</strong> をダウンロードしてアップロードしてください。カテゴリ別に分かれた個別ファイルではなく、全カテゴリ一括のファイルが必要です。
+      </div>
 
       <form className="upload-form" onSubmit={handleSubmit}>
         <div className="form-group">

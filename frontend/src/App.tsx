@@ -33,22 +33,22 @@ function App() {
   const navLinks = (
     <>
       <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-        使い方
+        📖 使い方
       </NavLink>
       <NavLink to="/rankings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-        ランキング
+        🏆 ランキング
       </NavLink>
       <NavLink to="/races" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-        レース一覧
+        🏁 レース一覧
       </NavLink>
       <NavLink to="/predict" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-        予想リザルト
+        🔮 予想リザルト
       </NavLink>
       <NavLink to="/admin" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-        レース結果アップロード
+        📤 レース結果アップロード
       </NavLink>
       <NavLink to="/world-ranking" className={({ isActive }) => isActive ? 'nav-link nav-link-dev active' : 'nav-link nav-link-dev'}>
-        世界ランク試算
+        🌍 世界ランク試算
       </NavLink>
     </>
   )
@@ -56,7 +56,7 @@ function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1 className="logo">Triathlon Analysis</h1>
+        <h1 className="logo">🏅 Triathlon Analysis</h1>
 
         {/* Desktop nav */}
         <nav className="nav nav-desktop">

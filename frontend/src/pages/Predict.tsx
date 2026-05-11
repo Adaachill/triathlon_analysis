@@ -72,12 +72,17 @@ export default function Predict() {
       <div className="predict-page">
         <div className="card">
           <div className="page-header">
-            <h2>予想リザルト</h2>
+            <h2>🔮 予想リザルト</h2>
           </div>
           <p className="desc">
             スタートリスト（.xlsx）をアップロードすると、ALS強度とコース難易度から
             各選手の予想タイム・予想順位を算出します。
           </p>
+          <div className="upload-note">
+            <strong>⚠️ ファイルの取得方法：</strong>
+            <a href="https://www.triathlon.org/events" target="_blank" rel="noreferrer">WorldTriathlon 大会ページ</a>
+            の対象レースを開き、「Start List」タブ →「Download」から <strong>全カテゴリを含む Excel（.xlsx）</strong> をダウンロードしてください。カテゴリ別に分かれた個別ファイルではなく、全カテゴリ一括のファイルが必要です。
+          </div>
           <div className="predict-upload-area">
             <button
               className="btn-upload"
