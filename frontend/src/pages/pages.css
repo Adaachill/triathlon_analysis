@@ -864,3 +864,140 @@
   color: #f87171;
   font-size: 0.9rem;
 }
+
+/* RaceDetail: subtle ALS difficulty line */
+.race-difficulty-subtle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0.25rem 0 0;
+}
+
+.diff-harder {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.diff-easier {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.difficulty-note {
+  margin-left: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.difficulty-details-toggle {
+  margin-top: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.difficulty-details-summary {
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  list-style: none;
+  background: var(--bg);
+}
+
+.difficulty-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.difficulty-details-summary::before {
+  content: '▶ ';
+  font-size: 0.65rem;
+  color: var(--accent);
+}
+
+.difficulty-details-toggle[open] .difficulty-details-summary::before {
+  content: '▼ ';
+}
+
+.difficulty-details-toggle[open] .difficulty-details-summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.difficulty-details-body {
+  padding: 1rem;
+}
+
+/* AthleteDetail: segment rank chips */
+.athlete-seg-ranks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.seg-rank-chip {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+}
+
+.seg-rank-chip strong {
+  color: var(--text);
+}
+
+/* AthleteDetail: period stats table */
+.athlete-period-stats {
+  margin-top: 1.25rem;
+}
+
+.period-stats-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.period-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.period-stats-table th {
+  text-align: right;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.3rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.period-stats-table th:first-child {
+  text-align: left;
+}
+
+.period-stats-table td {
+  padding: 0.3rem 0.6rem;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+
+.period-stats-table td:first-child {
+  text-align: left;
+}
+
+.period-count {
+  font-size: 0.75rem;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.period-seg-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
