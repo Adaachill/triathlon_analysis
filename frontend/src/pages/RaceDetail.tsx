@@ -5,6 +5,8 @@ import { api, formatTime, formatDiff } from '../api'
 import type { RaceResult } from '../api'
 import './pages.css'
 
+type ViewMode = 'actual' | 'standard' | 'gap'
+
 const SEGS: { key: keyof RaceResult; predKey: keyof RaceResult; label: string }[] = [
   { key: 'swim_sec', predKey: 'pred_swim_sec', label: 'Swim' },
   { key: 't1_sec',   predKey: 'pred_t1_sec',   label: 'T1'   },
@@ -26,6 +28,7 @@ export default function RaceDetail() {
   const [editForm, setEditForm] = useState({ name: '', date: '', location: '', points: '', note: '' })
   const [saving, setSaving] = useState(false)
   const [expandedAthletes, setExpandedAthletes] = useState<Set<string>>(new Set())
+  const [viewMode, setViewMode] = useState<ViewMode>('actual')
 
   useEffect(() => {
     api.getPrograms().then((r) => {
@@ -129,7 +132,20 @@ export default function RaceDetail() {
   }))
 
   const hasPred = results.some((r) => r.pred_swim_sec != null || r.pred_t1_sec != null)
-  const colSpanTotal = 3 + 5 + 2 + (difficulty_offset != null ? 2 : 0)
+  const hasStandard = difficulty_offset != null
+  const colSpanBase = 3 + (hasStandard ? 2 : 0)
+
+  const viewModeOptions: { value: ViewMode; label: string }[] = [
+    { value: 'actual', label: '実タイム' },
+    { value: 'standard', label: '標準化タイム' },
+    { value: 'gap', label: '予想とのギャップ' },
+  ]
+
+  const getSegGap = (r: RaceResult, key: keyof RaceResult, predKey: keyof RaceResult) => {
+    const actual = r[key] as number | null | undefined
+    const pred = r[predKey] as number | null | undefined
+    return actual != null && pred != null ? actual - pred : null
+  }
 
   return (
     <div className="race-detail-page">
@@ -331,29 +347,71 @@ export default function RaceDetail() {
           </div>
         )}
 
-        {hasPred && (
-          <p className="desc" style={{ marginTop: '1rem' }}>
-            行をクリックするとセグメントの実タイム・予想タイム・差分を展開/折りたたみできます。
-            予想タイム = 選手のstrength（標準化平均）＋このレースの難易度オフセット。逆転: ↑＝強さ順位より上位、↓＝下位。
-          </p>
-        )}
+        <div className="results-toolbar">
+          <div className="view-mode-selector">
+            <label className="view-mode-label">表示:</label>
+            <select
+              value={viewMode}
+              onChange={(e) => setViewMode(e.target.value as ViewMode)}
+              className="view-mode-select"
+            >
+              {viewModeOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          {hasPred && viewMode === 'actual' && (
+            <p className="desc" style={{ margin: 0 }}>
+              行をクリックするとセグメント詳細を展開/折りたたみできます。
+            </p>
+          )}
+          {viewMode === 'gap' && (
+            <p className="desc" style={{ margin: 0 }}>
+              予想タイムとの差分。マイナス（緑）＝予想より速い、プラス（赤）＝予想より遅い。
+            </p>
+          )}
+        </div>
 
         <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
                 <th>順位</th>
-                {difficulty_offset != null && <th>強さ順位</th>}
-                {difficulty_offset != null && <th>逆転</th>}
+                {hasStandard && <th>強さ順位</th>}
+                {hasStandard && <th>逆転</th>}
                 <th>選手名</th>
                 <th>国</th>
-                <th>スイム</th>
-                <th>T1</th>
-                <th>バイク</th>
-                <th>T2</th>
-                <th>ラン</th>
-                <th>合計</th>
-                {difficulty_offset != null && <th>標準化</th>}
+                {viewMode === 'actual' && (
+                  <>
+                    <th>スイム</th>
+                    <th>T1</th>
+                    <th>バイク</th>
+                    <th>T2</th>
+                    <th>ラン</th>
+                    <th className="col-total-highlight">合計</th>
+                  </>
+                )}
+                {viewMode === 'standard' && (
+                  <>
+                    <th>スイム</th>
+                    <th>T1</th>
+                    <th>バイク</th>
+                    <th>T2</th>
+                    <th>ラン</th>
+                    <th>実タイム合計</th>
+                    <th className="col-total-highlight">標準化合計</th>
+                  </>
+                )}
+                {viewMode === 'gap' && (
+                  <>
+                    <th>Swim差</th>
+                    <th>T1差</th>
+                    <th>Bike差</th>
+                    <th>T2差</th>
+                    <th>Run差</th>
+                    <th className="col-total-highlight">合計差</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -363,8 +421,18 @@ export default function RaceDetail() {
                   r.strength_rank != null && r.position != null
                     ? r.strength_rank - r.position
                     : null
-                const canExpand = hasPred && r.status === 'Finished'
+                const canExpand = hasPred && r.status === 'Finished' && viewMode === 'actual'
                 const isOutlier = r.outlier_weight != null && r.outlier_weight < 0.8
+
+                const totalGap = (() => {
+                  const actuals = SEGS.map(({ key }) => r[key] as number | null | undefined)
+                  const preds = SEGS.map(({ predKey }) => r[predKey] as number | null | undefined)
+                  const totalActual = actuals.every((v) => v != null) ? actuals.reduce<number>((s, v) => s + (v as number), 0) : null
+                  const totalPred = preds.every((v) => v != null) ? preds.reduce<number>((s, v) => s + (v as number), 0) : null
+                  return totalActual != null && totalPred != null ? totalActual - totalPred : null
+                })()
+
+                const colSpanTotal = colSpanBase + (viewMode === 'actual' ? 6 : viewMode === 'standard' ? 7 : 6)
 
                 return (
                   <Fragment key={r.athlete_id}>
@@ -377,27 +445,21 @@ export default function RaceDetail() {
                       title={canExpand ? 'クリックしてセグメント詳細を表示' : undefined}
                     >
                       <td className="rank">{r.position ?? '--'}</td>
-                      {difficulty_offset != null && (
+                      {hasStandard && (
                         <td className="rank">{r.strength_rank ?? '--'}</td>
                       )}
-                      {difficulty_offset != null && (
+                      {hasStandard && (
                         <td>
                           {reversalDiff === null ? (
                             <span className="mono">--</span>
                           ) : reversalDiff === 0 ? (
                             <span className="reversal-none">±0</span>
                           ) : reversalDiff > 0 ? (
-                            <span
-                              className="reversal-up"
-                              title={`強さ順位${r.strength_rank}位に対し実際${r.position}位（${reversalDiff}位分上回り）`}
-                            >
+                            <span className="reversal-up" title={`強さ順位${r.strength_rank}位に対し実際${r.position}位（${reversalDiff}位分上回り）`}>
                               ↑{reversalDiff}
                             </span>
                           ) : (
-                            <span
-                              className="reversal-down"
-                              title={`強さ順位${r.strength_rank}位に対し実際${r.position}位（${Math.abs(reversalDiff)}位分下回り）`}
-                            >
+                            <span className="reversal-down" title={`強さ順位${r.strength_rank}位に対し実際${r.position}位（${Math.abs(reversalDiff)}位分下回り）`}>
                               ↓{Math.abs(reversalDiff)}
                             </span>
                           )}
@@ -416,16 +478,47 @@ export default function RaceDetail() {
                         </Link>
                       </td>
                       <td>{r.country}</td>
-                      <td className="mono">{formatTime(r.swim_sec)}</td>
-                      <td className="mono">{formatTime(r.t1_sec)}</td>
-                      <td className="mono">{formatTime(r.bike_sec)}</td>
-                      <td className="mono">{formatTime(r.t2_sec)}</td>
-                      <td className="mono">{formatTime(r.run_sec)}</td>
-                      <td className="mono">{formatTime(r.total_sec)}</td>
-                      {difficulty_offset != null && (
-                        <td className="mono">{formatTime(r.standard_total_sec)}</td>
+
+                      {viewMode === 'actual' && (
+                        <>
+                          <td className="mono">{formatTime(r.swim_sec)}</td>
+                          <td className="mono">{formatTime(r.t1_sec)}</td>
+                          <td className="mono">{formatTime(r.bike_sec)}</td>
+                          <td className="mono">{formatTime(r.t2_sec)}</td>
+                          <td className="mono">{formatTime(r.run_sec)}</td>
+                          <td className="mono time-actual-total">{formatTime(r.total_sec)}</td>
+                        </>
+                      )}
+
+                      {viewMode === 'standard' && (
+                        <>
+                          <td className="mono">{formatTime(r.swim_sec)}</td>
+                          <td className="mono">{formatTime(r.t1_sec)}</td>
+                          <td className="mono">{formatTime(r.bike_sec)}</td>
+                          <td className="mono">{formatTime(r.t2_sec)}</td>
+                          <td className="mono">{formatTime(r.run_sec)}</td>
+                          <td className="mono time-actual-muted">{formatTime(r.total_sec)}</td>
+                          <td className="mono time-standard-total">{formatTime(r.standard_total_sec)}</td>
+                        </>
+                      )}
+
+                      {viewMode === 'gap' && (
+                        <>
+                          {SEGS.map(({ key, predKey, label }) => {
+                            const gap = getSegGap(r, key, predKey)
+                            return (
+                              <td key={label} className={gap == null ? 'mono' : gap < 0 ? 'mono diff-fast' : gap > 0 ? 'mono diff-slow' : 'mono'}>
+                                {formatDiff(gap)}
+                              </td>
+                            )
+                          })}
+                          <td className={totalGap == null ? 'mono time-actual-total' : totalGap < 0 ? 'mono diff-fast time-actual-total' : totalGap > 0 ? 'mono diff-slow time-actual-total' : 'mono time-actual-total'}>
+                            {formatDiff(totalGap)}
+                          </td>
+                        </>
                       )}
                     </tr>
+
                     {canExpand && isExpanded && (
                       <tr className="segment-detail-row">
                         <td colSpan={colSpanTotal}>
