@@ -81,15 +81,33 @@ async def get_athlete(
             None,
         )
 
-        # セグメント別 ALS 標準化タイム
+        # セグメント別 ALS 標準化タイム・予想タイム
         _seg_fields = ["swim_sec", "t1_sec", "bike_sec", "t2_sec", "run_sec"]
         standard_segs = {}
+        pred_segs = {}
         for sf in _seg_fields:
             val = getattr(r, sf)
             seg_diff = race_diffs.get(sf)
+            # 標準化: actual - diff（実績の難易度補正）
             standard_segs[f"standard_{sf}"] = (
                 float(val - seg_diff) if val is not None and seg_diff is not None else None
             )
+            # 予想タイム: strength + diff（レースページと同じ計算）
+            seg_key = sf.replace("_sec", "")
+            strength_seg = strength_data.get(f"strength_{seg_key}") if strength_data else None
+            pred_segs[f"pred_{sf}"] = (
+                float(strength_seg + seg_diff)
+                if strength_seg is not None and seg_diff is not None
+                else None
+            )
+
+        # 予想合計 = strength_total + diff_total（セグメント合計ではなくtotal_secモデルを使う）
+        strength_total_val = strength_data.get("strength") if strength_data else None
+        pred_total = (
+            float(strength_total_val + als_diff)
+            if strength_total_val is not None and als_diff is not None
+            else None
+        )
 
         race_details.append({
             "race_id": race.id,
@@ -98,12 +116,14 @@ async def get_athlete(
             "date": str(race.date) if race.date else None,
             "total_sec": r.total_sec,
             "standard_total_sec": standard_total,
+            "pred_total_sec": pred_total,
             "swim_sec": r.swim_sec,
             "t1_sec": r.t1_sec,
             "bike_sec": r.bike_sec,
             "t2_sec": r.t2_sec,
             "run_sec": r.run_sec,
             **standard_segs,
+            **pred_segs,
             "position": r.position,
             "difficulty_offset": als_diff if als_diff is not None else 0.0,
             "strength_rank": strength_rank,

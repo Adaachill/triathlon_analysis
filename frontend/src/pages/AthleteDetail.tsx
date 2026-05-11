@@ -197,24 +197,24 @@ export default function AthleteDetail() {
                               <tr>
                                 <th>セグメント</th>
                                 <th>実タイム</th>
-                                <th>ALS標準化</th>
+                                <th>予想タイム</th>
                                 <th>差分</th>
                               </tr>
                             </thead>
                             <tbody>
                               {([
-                                { label: 'Swim', actual: r.swim_sec, std: r.standard_swim_sec },
-                                { label: 'T1',   actual: r.t1_sec,   std: r.standard_t1_sec   },
-                                { label: 'Bike', actual: r.bike_sec, std: r.standard_bike_sec },
-                                { label: 'T2',   actual: r.t2_sec,   std: r.standard_t2_sec   },
-                                { label: 'Run',  actual: r.run_sec,  std: r.standard_run_sec  },
-                              ] as const).map(({ label, actual, std }) => {
-                                const diff = actual != null && std != null ? actual - std : null
+                                { label: 'Swim', actual: r.swim_sec, pred: r.pred_swim_sec },
+                                { label: 'T1',   actual: r.t1_sec,   pred: r.pred_t1_sec   },
+                                { label: 'Bike', actual: r.bike_sec, pred: r.pred_bike_sec },
+                                { label: 'T2',   actual: r.t2_sec,   pred: r.pred_t2_sec   },
+                                { label: 'Run',  actual: r.run_sec,  pred: r.pred_run_sec  },
+                              ] as const).map(({ label, actual, pred }) => {
+                                const diff = actual != null && pred != null ? actual - pred : null
                                 return (
                                   <tr key={label}>
                                     <td className="seg-label">{label}</td>
                                     <td className="mono">{formatTime(actual)}</td>
-                                    <td className="mono">{formatTime(std)}</td>
+                                    <td className="mono">{formatTime(pred)}</td>
                                     <td className={
                                       diff == null ? 'mono' :
                                       diff < 0 ? 'mono diff-fast' : diff > 0 ? 'mono diff-slow' : 'mono'
@@ -224,35 +224,20 @@ export default function AthleteDetail() {
                                   </tr>
                                 )
                               })}
-                              {(() => {
-                                const segs = [
-                                  { actual: r.swim_sec, std: r.standard_swim_sec },
-                                  { actual: r.t1_sec,   std: r.standard_t1_sec   },
-                                  { actual: r.bike_sec, std: r.standard_bike_sec },
-                                  { actual: r.t2_sec,   std: r.standard_t2_sec   },
-                                  { actual: r.run_sec,  std: r.standard_run_sec  },
-                                ]
-                                const totalActual = segs.every(({ actual }) => actual != null)
-                                  ? segs.reduce((s, { actual }) => s + (actual as number), 0)
-                                  : null
-                                const totalStd = segs.every(({ std }) => std != null)
-                                  ? segs.reduce((s, { std }) => s + (std as number), 0)
-                                  : null
-                                const totalDiff = totalActual != null && totalStd != null ? totalActual - totalStd : null
-                                return (
-                                  <tr className="seg-total-row">
-                                    <td className="seg-label">合計</td>
-                                    <td className="mono">{formatTime(totalActual)}</td>
-                                    <td className="mono">{formatTime(totalStd)}</td>
-                                    <td className={
-                                      totalDiff == null ? 'mono' :
-                                      totalDiff < 0 ? 'mono diff-fast' : totalDiff > 0 ? 'mono diff-slow' : 'mono'
-                                    }>
-                                      {formatDiff(totalDiff)}
-                                    </td>
-                                  </tr>
-                                )
-                              })()}
+                              <tr className="seg-total-row">
+                                <td className="seg-label">合計</td>
+                                <td className="mono">{formatTime(r.total_sec)}</td>
+                                <td className="mono">{formatTime(r.pred_total_sec)}</td>
+                                <td className={
+                                  r.total_sec == null || r.pred_total_sec == null ? 'mono' :
+                                  r.total_sec - r.pred_total_sec < 0 ? 'mono diff-fast' :
+                                  r.total_sec - r.pred_total_sec > 0 ? 'mono diff-slow' : 'mono'
+                                }>
+                                  {r.total_sec != null && r.pred_total_sec != null
+                                    ? formatDiff(r.total_sec - r.pred_total_sec)
+                                    : '--'}
+                                </td>
+                              </tr>
                             </tbody>
                           </table>
                         </td>

@@ -18,6 +18,7 @@ def compute_optimized_program(
     outlier_k: float = 2.5,
     min_weight: float = 0.1,
     max_iter: int = 30,
+    exclude_race_ids: set[int] | None = None,
 ) -> dict:
     """
     ALS + IRLS で難易度・強さ指標を計算する。
@@ -25,6 +26,7 @@ def compute_optimized_program(
     モデル: actual[athlete, race, seg] ≈ strength[athlete, seg] + difficulty[race, seg]
     識別制約: 各フィールドで mean(difficulty[r]) = 0（平均センタリング）
     外れ値: total_sec 残差の MAD × 1.4826 × outlier_k を超えるペアを downweight
+    exclude_race_ids: 指定したrace_idを計算から除外する（差分比較用）
 
     Returns:
         {
@@ -41,6 +43,9 @@ def compute_optimized_program(
             Result.total_sec.isnot(None),
         )
     ).all()
+
+    if exclude_race_ids:
+        results = [r for r in results if r.race_id not in exclude_race_ids]
 
     if not results:
         return {
