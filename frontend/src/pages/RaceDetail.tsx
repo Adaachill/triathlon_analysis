@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { api, formatTime, formatDiff } from '../api'
@@ -14,6 +14,179 @@ const SEGS: { key: keyof RaceResult; predKey: keyof RaceResult; label: string }[
   { key: 't2_sec',   predKey: 'pred_t2_sec',   label: 'T2'   },
   { key: 'run_sec',  predKey: 'pred_run_sec',  label: 'Run'  },
 ]
+
+const SEG_CONFIG: { key: keyof RaceResult; label: string; icon: string; color: string }[] = [
+  { key: 'swim_sec', label: 'Swim', icon: '🏊', color: '#38bdf8' },
+  { key: 't1_sec',   label: 'T1',   icon: '⚡', color: '#c4b5fd' },
+  { key: 'bike_sec', label: 'Bike', icon: '🚴', color: '#fb923c' },
+  { key: 't2_sec',   label: 'T2',   icon: '🔄', color: '#f9a8d4' },
+  { key: 'run_sec',  label: 'Run',  icon: '🏃', color: '#4ade80' },
+]
+
+const CHECKPOINT_LABELS = [
+  { headline: 'スイム', sub: 'Swim 終了後の順位', icon: '🏊' },
+  { headline: 'T1 通過', sub: 'スイム + T1', icon: '⚡' },
+  { headline: 'バイク', sub: 'バイク終了後の順位', icon: '🚴' },
+  { headline: 'T2 通過', sub: 'バイク + T2', icon: '🔄' },
+  { headline: 'フィニッシュ', sub: '最終タイム', icon: '🏁' },
+]
+
+function CumulativeSegChart({ results }: { results: RaceResult[] }) {
+  const [step, setStep] = useState(4)
+  const [animKey, setAnimKey] = useState(0)
+  const touchStartX = useRef<number | null>(null)
+  const touchStartY = useRef<number | null>(null)
+
+  const top15 = useMemo(() =>
+    results
+      .filter((r) => r.status === 'Finished' && r.total_sec != null)
+      .sort((a, b) => (a.total_sec ?? 999999) - (b.total_sec ?? 999999))
+      .slice(0, 15),
+    [results]
+  )
+
+  const chartData = useMemo(() =>
+    top15.map((r) => {
+      const entry: Record<string, number | string> = {
+        name: r.last_name || r.athlete_id,
+      }
+      SEG_CONFIG.forEach((seg, i) => {
+        entry[seg.key as string] = i <= step ? ((r[seg.key] as number | null) ?? 0) : 0
+      })
+      return entry
+    }),
+    [top15, step]
+  )
+
+  const goTo = (newStep: number) => {
+    setStep(newStep)
+    setAnimKey((k) => k + 1)
+  }
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+  }
+
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    const dy = e.changedTouches[0].clientY - touchStartY.current
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+      if (dx < 0 && step < 4) goTo(step + 1)
+      if (dx > 0 && step > 0) goTo(step - 1)
+    }
+    touchStartX.current = null
+    touchStartY.current = null
+  }
+
+  const cp = CHECKPOINT_LABELS[step]
+
+  if (top15.length === 0) return null
+
+  return (
+    <div className="cum-chart-card">
+      <div className="cum-chart-header">
+        <div className="cum-chart-title">
+          <span className="cum-chart-icon">{cp.icon}</span>
+          <div>
+            <div className="cum-chart-headline">{cp.headline}</div>
+            <div className="cum-chart-sub">{cp.sub}</div>
+          </div>
+        </div>
+        <div className="cum-step-dots" role="tablist">
+          {CHECKPOINT_LABELS.map((cl, i) => (
+            <button
+              key={i}
+              role="tab"
+              aria-selected={i === step}
+              className={`cum-step-dot${i === step ? ' active' : ''}`}
+              onClick={() => goTo(i)}
+              title={cl.headline}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div
+        className="cum-chart-wrap"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
+        <button
+          className="cum-nav-btn cum-nav-left"
+          onClick={() => step > 0 && goTo(step - 1)}
+          disabled={step === 0}
+          aria-label="前のチェックポイント"
+        >‹</button>
+
+        <div className="cum-chart-inner" key={animKey}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 64 }}>
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 10 }}
+                angle={-45}
+                textAnchor="end"
+                height={72}
+                interval={0}
+              />
+              <YAxis
+                tickFormatter={(v) => formatTime(v)}
+                tick={{ fontSize: 10 }}
+                width={52}
+              />
+              <Tooltip
+                formatter={(v: number, name: string) => {
+                  const seg = SEG_CONFIG.find((s) => (s.key as string) === name)
+                  return [formatTime(v), seg ? `${seg.icon} ${seg.label}` : name]
+                }}
+                contentStyle={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  fontSize: '0.82rem',
+                  borderRadius: '8px',
+                }}
+                cursor={{ fill: 'rgba(30,107,186,0.06)' }}
+              />
+              {SEG_CONFIG.map((seg, i) => (
+                <Bar
+                  key={seg.key as string}
+                  dataKey={seg.key as string}
+                  stackId="a"
+                  fill={seg.color}
+                  isAnimationActive
+                  animationDuration={500}
+                  animationEasing="ease-out"
+                  radius={i === step ? [4, 4, 0, 0] : i === 0 ? [0, 0, 4, 4] : undefined}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <button
+          className="cum-nav-btn cum-nav-right"
+          onClick={() => step < 4 && goTo(step + 1)}
+          disabled={step === 4}
+          aria-label="次のチェックポイント"
+        >›</button>
+      </div>
+
+      <div className="cum-legend">
+        {SEG_CONFIG.slice(0, step + 1).map((seg) => (
+          <span key={seg.key as string} className="cum-legend-item">
+            <span className="cum-legend-dot" style={{ background: seg.color }} />
+            <span className="cum-legend-icon">{seg.icon}</span>
+            {seg.label}
+          </span>
+        ))}
+      </div>
+
+      <p className="cum-swipe-hint">← スワイプでチェックポイントを切り替え →</p>
+    </div>
+  )
+}
 
 export default function RaceDetail() {
   const { raceId } = useParams<{ raceId: string }>()
@@ -116,13 +289,6 @@ export default function RaceDetail() {
 
   const cancelEdit = () => setEditing(false)
 
-  const withStandard = results.filter((r) => r.standard_total_sec != null)
-  const chartData = withStandard.slice(0, 20).map((r) => ({
-    name: `${r.first_name} ${r.last_name}`.trim() || r.athlete_id,
-    total: r.total_sec,
-    standard: r.standard_total_sec,
-  }))
-
   const hasPred = results.some((r) => r.pred_swim_sec != null || r.pred_t1_sec != null)
   const hasStandard = difficulty_als != null
   const colSpanBase = 3 + (hasStandard ? 2 : 0)
@@ -213,32 +379,7 @@ export default function RaceDetail() {
           </p>
         )}
 
-        {chartData.length > 0 && (
-          <div className="chart-container">
-            <h3>上位選手のタイム比較</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={chartData} margin={{ top: 10, right: 20, left: 20, bottom: 60 }}>
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis
-                  tickFormatter={(v) => formatTime(v)}
-                  domain={[3300, 'dataMax']}
-                />
-                <Tooltip
-                  formatter={(v: number) => formatTime(v)}
-                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-                />
-                <Bar dataKey="total" name="実タイム" fill="var(--text-muted)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="standard" name="標準化" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        <CumulativeSegChart results={results} />
 
         <div className="results-toolbar">
           <div className="view-mode-selector">
@@ -276,33 +417,33 @@ export default function RaceDetail() {
                 <th>国</th>
                 {viewMode === 'actual' && (
                   <>
-                    <th>スイム</th>
-                    <th>T1</th>
-                    <th>バイク</th>
-                    <th>T2</th>
-                    <th>ラン</th>
-                    <th className="col-total-highlight">合計</th>
+                    <th>🏊 Swim</th>
+                    <th>⚡ T1</th>
+                    <th>🚴 Bike</th>
+                    <th>🔄 T2</th>
+                    <th>🏃 Run</th>
+                    <th className="col-total-highlight">🏁 合計</th>
                   </>
                 )}
                 {viewMode === 'standard' && (
                   <>
-                    <th>スイム</th>
-                    <th>T1</th>
-                    <th>バイク</th>
-                    <th>T2</th>
-                    <th>ラン</th>
+                    <th>🏊 Swim</th>
+                    <th>⚡ T1</th>
+                    <th>🚴 Bike</th>
+                    <th>🔄 T2</th>
+                    <th>🏃 Run</th>
                     <th>実タイム合計</th>
                     <th className="col-total-highlight">標準化合計</th>
                   </>
                 )}
                 {viewMode === 'gap' && (
                   <>
-                    <th>Swim差</th>
-                    <th>T1差</th>
-                    <th>Bike差</th>
-                    <th>T2差</th>
-                    <th>Run差</th>
-                    <th className="col-total-highlight">合計差</th>
+                    <th>🏊 Swim差</th>
+                    <th>⚡ T1差</th>
+                    <th>🚴 Bike差</th>
+                    <th>🔄 T2差</th>
+                    <th>🏃 Run差</th>
+                    <th className="col-total-highlight">🏁 合計差</th>
                   </>
                 )}
               </tr>
@@ -429,9 +570,10 @@ export default function RaceDetail() {
                                 const actual = r[key] as number | null | undefined
                                 const pred = r[predKey] as number | null | undefined
                                 const diff = actual != null && pred != null ? actual - pred : null
+                                const seg = SEG_CONFIG.find((s) => s.key === key)
                                 return (
                                   <tr key={label}>
-                                    <td className="seg-label">{label}</td>
+                                    <td className="seg-label">{seg?.icon} {label}</td>
                                     <td className="mono">{formatTime(actual)}</td>
                                     <td className="mono">{formatTime(pred)}</td>
                                     <td className={
@@ -455,7 +597,7 @@ export default function RaceDetail() {
                                 const totalDiff = totalActual != null && totalPred != null ? totalActual - totalPred : null
                                 return (
                                   <tr className="seg-total-row">
-                                    <td className="seg-label">合計</td>
+                                    <td className="seg-label">🏁 合計</td>
                                     <td className="mono">{formatTime(totalActual)}</td>
                                     <td className="mono">{formatTime(totalPred)}</td>
                                     <td className={
@@ -485,11 +627,11 @@ export default function RaceDetail() {
             <div className="difficulty-details-body">
               <div className="difficulty-segments">
                 {([
-                  { label: 'スイム', value: difficulty_segments_als.swim_sec },
-                  { label: 'T1',     value: difficulty_segments_als.t1_sec   },
-                  { label: 'バイク', value: difficulty_segments_als.bike_sec },
-                  { label: 'T2',     value: difficulty_segments_als.t2_sec   },
-                  { label: 'ラン',   value: difficulty_segments_als.run_sec  },
+                  { label: '🏊 Swim', value: difficulty_segments_als.swim_sec },
+                  { label: '⚡ T1',   value: difficulty_segments_als.t1_sec   },
+                  { label: '🚴 Bike', value: difficulty_segments_als.bike_sec },
+                  { label: '🔄 T2',   value: difficulty_segments_als.t2_sec   },
+                  { label: '🏃 Run',  value: difficulty_segments_als.run_sec  },
                 ] as const).map(({ label, value }) => (
                   value != null ? (
                     <span key={label} className={`difficulty-chip ${value >= 0 ? 'harder' : 'easier'}`}>
