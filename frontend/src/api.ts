@@ -247,6 +247,7 @@ export interface WorldRankingRace {
   race_name: string | null;
   date: string;
   points: number;
+  is_future: boolean;
 }
 
 export interface WorldRankingEntry {
@@ -265,11 +266,59 @@ export interface WorldRankingEntry {
 export interface WorldRankingResponse {
   program_name: string;
   as_of_date: string;
+  include_predictions: boolean;
   current_start: string;
   current_end: string;
   previous_start: string;
   previous_end: string;
   rankings: WorldRankingEntry[];
+}
+
+// World Triathlon Algolia search API (public search-only key)
+const WT_ALGOLIA_APP_ID = 'GAVNABD4CQ';
+const WT_ALGOLIA_API_KEY = 'a3a9ddd1c59b3f5474c08dec7839c8fb';
+const WT_ALGOLIA_INDEX = 'tri_prod_events';
+
+export interface AlgoliaEvent {
+  id: number;
+  name: string;
+  start_date: string;
+  finish_date: string;
+  city: string | null;
+  country_name: string;
+  status: string;
+  sport_categories: string[];
+  specification_categories: string[];
+  startlist_available: boolean;
+  results_available: boolean;
+}
+
+export async function getUpcomingEvents(daysAhead = 365): Promise<AlgoliaEvent[]> {
+  const nowTs = Math.floor(Date.now() / 1000);
+  const endTs = nowTs + daysAhead * 86400;
+  const url =
+    `https://${WT_ALGOLIA_APP_ID.toLowerCase()}-dsn.algolia.net/1/indexes/*/queries` +
+    `?x-algolia-api-key=${WT_ALGOLIA_API_KEY}&x-algolia-application-id=${WT_ALGOLIA_APP_ID}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{
+        indexName: WT_ALGOLIA_INDEX,
+        query: '',
+        page: 0,
+        hitsPerPage: 200,
+        numericFilters: [
+          `start_date_timestamp >= ${nowTs}`,
+          `start_date_timestamp <= ${endTs}`,
+        ],
+      }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Algolia error: ${res.status}`);
+  const data = await res.json();
+  const hits: AlgoliaEvent[] = data.results?.[0]?.hits ?? [];
+  return hits.sort((a, b) => a.start_date.localeCompare(b.start_date));
 }
 
 export interface EvalModelStat {
@@ -304,8 +353,12 @@ export const api = {
     form.append('file', file);
     return uploadApi<PredictResponse>('/predict/upload-startlist', form);
   },
-  getWorldRanking: (programName: string, asOfDate: string) =>
-    fetchApi<WorldRankingResponse>('/world-ranking', { program_name: programName, as_of_date: asOfDate }),
+  getWorldRanking: (programName: string, asOfDate: string, includePredictions = false) =>
+    fetchApi<WorldRankingResponse>('/world-ranking', {
+      program_name: programName,
+      as_of_date: asOfDate,
+      include_predictions: String(includePredictions),
+    }),
   uploadRaceResult: (params: {
     file: File;
     race_name: string;

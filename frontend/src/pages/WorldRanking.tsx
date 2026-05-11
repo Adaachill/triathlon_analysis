@@ -1,18 +1,36 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../api'
-import type { WorldRankingEntry } from '../api'
+import { api, getUpcomingEvents } from '../api'
+import type { WorldRankingEntry, AlgoliaEvent } from '../api'
 import './pages.css'
 import './WorldRanking.css'
+
+type DateMode = 'direct' | 'from_race'
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function subtractDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() - days)
+  return d.toISOString().slice(0, 10)
+}
+
+function sportLabel(ev: AlgoliaEvent): string {
+  return ev.sport_categories.join(' / ')
+}
+
 export default function WorldRanking() {
   const [programs, setPrograms] = useState<string[]>([])
   const [program, setProgram] = useState('')
-  const [asOfDate, setAsOfDate] = useState(todayStr())
+  const [dateMode, setDateMode] = useState<DateMode>('direct')
+  const [directDate, setDirectDate] = useState(todayStr())
+  const [upcomingEvents, setUpcomingEvents] = useState<AlgoliaEvent[]>([])
+  const [eventsLoading, setEventsLoading] = useState(false)
+  const [eventsError, setEventsError] = useState<string | null>(null)
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null)
+  const [includePredictions, setIncludePredictions] = useState(false)
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getWorldRanking>> | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -26,14 +44,37 @@ export default function WorldRanking() {
   }, [])
 
   useEffect(() => {
+    if (dateMode !== 'from_race') return
+    if (upcomingEvents.length > 0) return
+    setEventsLoading(true)
+    setEventsError(null)
+    getUpcomingEvents()
+      .then(setUpcomingEvents)
+      .catch((e) => setEventsError(e.message))
+      .finally(() => setEventsLoading(false))
+  }, [dateMode])
+
+  const selectedEvent = useMemo(
+    () => upcomingEvents.find((e) => e.id === selectedEventId) ?? null,
+    [upcomingEvents, selectedEventId],
+  )
+
+  const asOfDate = useMemo(() => {
+    if (dateMode === 'from_race' && selectedEvent) {
+      return subtractDays(selectedEvent.start_date, 30)
+    }
+    return directDate
+  }, [dateMode, selectedEvent, directDate])
+
+  useEffect(() => {
     if (!program || !asOfDate) return
     setLoading(true)
     setError(null)
-    api.getWorldRanking(program, asOfDate)
+    api.getWorldRanking(program, asOfDate, includePredictions)
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [program, asOfDate])
+  }, [program, asOfDate, includePredictions])
 
   const toggleExpand = (athleteId: string) => {
     setExpandedAthletes((prev) => {
@@ -44,9 +85,20 @@ export default function WorldRanking() {
     })
   }
 
+  const today = todayStr()
+  const isFutureDate = asOfDate > today
+
+  const eventsBySport = useMemo(() => {
+    const groups: Record<string, AlgoliaEvent[]> = {}
+    for (const ev of upcomingEvents) {
+      const key = ev.sport_categories.join(', ') || 'Other'
+      ;(groups[key] ??= []).push(ev)
+    }
+    return groups
+  }, [upcomingEvents])
+
   return (
     <div className="wr-page">
-      {/* 開発中バナー */}
       <div className="wr-dev-banner">
         ⚠️ 世界ランキング（開発中）：このページは開発中です。計算結果は参考値であり、公式のWorld Triathlon世界ランキングとは異なる場合があります。
       </div>
@@ -66,16 +118,110 @@ export default function WorldRanking() {
               {programs.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
+
           <div className="wr-control-group">
-            <label className="wr-label">基準日</label>
-            <input
-              type="date"
-              value={asOfDate}
-              max={todayStr()}
-              onChange={(e) => setAsOfDate(e.target.value)}
-              className="wr-date-input"
-            />
+            <label className="wr-label">基準日の指定方法</label>
+            <div className="wr-date-mode-toggle">
+              <button
+                className={`wr-mode-btn ${dateMode === 'direct' ? 'active' : ''}`}
+                onClick={() => setDateMode('direct')}
+                type="button"
+              >
+                直接入力
+              </button>
+              <button
+                className={`wr-mode-btn ${dateMode === 'from_race' ? 'active' : ''}`}
+                onClick={() => setDateMode('from_race')}
+                type="button"
+              >
+                大会から選択
+              </button>
+            </div>
           </div>
+
+          {dateMode === 'direct' ? (
+            <div className="wr-control-group">
+              <label className="wr-label">基準日</label>
+              <input
+                type="date"
+                value={directDate}
+                onChange={(e) => setDirectDate(e.target.value)}
+                className="wr-date-input"
+              />
+            </div>
+          ) : (
+            <div className="wr-control-group">
+              <label className="wr-label">
+                大会を選択
+                <span className="wr-events-source"> (World Triathlon)</span>
+              </label>
+              {eventsLoading && <span className="wr-events-loading">読み込み中...</span>}
+              {eventsError && <span className="wr-events-error">取得失敗: {eventsError}</span>}
+              {!eventsLoading && !eventsError && (
+                <select
+                  value={selectedEventId ?? ''}
+                  onChange={(e) => setSelectedEventId(e.target.value ? Number(e.target.value) : null)}
+                  className="wr-race-select"
+                >
+                  <option value="">-- 大会を選んでください --</option>
+                  {Object.entries(eventsBySport).map(([sport, events]) => (
+                    <optgroup key={sport} label={sport}>
+                      {events.map((ev) => (
+                        <option key={ev.id} value={ev.id}>
+                          {ev.name}（{ev.start_date}{ev.city ? ` / ${ev.city}` : ''}）
+                          {ev.startlist_available ? ' ★' : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              )}
+              {selectedEvent && (
+                <div className="wr-event-detail">
+                  <span className="wr-race-date-hint">
+                    基準日: <strong>{asOfDate}</strong>（{selectedEvent.start_date} の30日前）
+                  </span>
+                  <div className="wr-event-badges">
+                    {selectedEvent.startlist_available && (
+                      <span className="wr-badge wr-badge-startlist">スタートリスト公開済み</span>
+                    )}
+                    {selectedEvent.results_available && (
+                      <span className="wr-badge wr-badge-results">結果あり</span>
+                    )}
+                    <span className="wr-badge wr-badge-sport">
+                      {sportLabel(selectedEvent)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {isFutureDate && (
+          <div className="wr-future-notice">
+            📅 基準日が未来（{asOfDate}）のため、その日までに開催済みのレース結果を使って試算しています。
+          </div>
+        )}
+
+        <div className="wr-predictions-row">
+          <label className="wr-predictions-label">
+            <span className="wr-predictions-toggle-wrap">
+              <input
+                type="checkbox"
+                checked={includePredictions}
+                onChange={(e) => setIncludePredictions(e.target.checked)}
+                className="wr-predictions-checkbox"
+              />
+              <span className="wr-predictions-text">未開催レースの予測結果を含める</span>
+            </span>
+            <span className="wr-coming-soon-badge">準備中</span>
+          </label>
+          {includePredictions && (
+            <p className="wr-predictions-note">
+              ※ スタートリストが発表済みの未来のレースについて、予測順位に基づくポイントを試算に含めます。この機能は現在開発中です。
+            </p>
+          )}
         </div>
 
         {data && (
@@ -157,7 +303,10 @@ export default function WorldRanking() {
                                   : entry.period1_races.map((r, idx) => (
                                     <div key={r.race_id} className={`wr-race-row ${idx < 3 ? 'wr-counted' : 'wr-not-counted'}`}>
                                       <span className="wr-race-date">{r.date}</span>
-                                      <span className="wr-race-name">{r.race_name ?? `Race ${r.race_id}`}</span>
+                                      <span className="wr-race-name">
+                                        {r.race_name ?? `Race ${r.race_id}`}
+                                        {r.is_future && <span className="wr-future-badge">予測</span>}
+                                      </span>
                                       <span className="wr-race-pts">{r.points.toFixed(1)}pt</span>
                                       {idx >= 3 && <span className="wr-not-counted-badge">加算外</span>}
                                     </div>
@@ -171,7 +320,10 @@ export default function WorldRanking() {
                                   : entry.period2_races.map((r, idx) => (
                                     <div key={r.race_id} className={`wr-race-row ${idx < 3 ? 'wr-counted' : 'wr-not-counted'}`}>
                                       <span className="wr-race-date">{r.date}</span>
-                                      <span className="wr-race-name">{r.race_name ?? `Race ${r.race_id}`}</span>
+                                      <span className="wr-race-name">
+                                        {r.race_name ?? `Race ${r.race_id}`}
+                                        {r.is_future && <span className="wr-future-badge">予測</span>}
+                                      </span>
                                       <span className="wr-race-pts">{r.points.toFixed(1)}pt</span>
                                       {idx >= 3 && <span className="wr-not-counted-badge">加算外</span>}
                                     </div>

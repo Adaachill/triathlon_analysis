@@ -19,6 +19,7 @@ def _calc_position_points(win_points: int, position: int) -> float:
 async def get_world_ranking(
     as_of_date: str = Query(..., description="基準日 (YYYY-MM-DD)"),
     program_name: str = Query(..., description="カテゴリ名"),
+    include_predictions: bool = Query(False, description="未開催レースの予測結果を含めるか"),
     session: Session = Depends(get_db),
 ):
     """
@@ -29,6 +30,7 @@ async def get_world_ranking(
     - 各期間の上位3大会のみ加算
     """
     as_of = date.fromisoformat(as_of_date)
+    today = date.today()
     period1_start = as_of - timedelta(days=365)
     period2_start = as_of - timedelta(days=730)
 
@@ -37,7 +39,11 @@ async def get_world_ranking(
         select(Race).where(Race.points.isnot(None), Race.date.isnot(None))
     ).all()
 
-    # 期間ごとに分類（基準日以前のみ）
+    # 期間ごとに分類
+    # include_predictions=False のとき: 基準日以前かつ今日以前のレースのみ
+    # include_predictions=True のとき: 基準日以前のレースを含む（未来分は予測ポイント扱い、将来実装）
+    cutoff = as_of if include_predictions else min(as_of, today)
+
     period1_race_ids: set[int] = set()
     period2_race_ids: set[int] = set()
     race_info: dict[int, dict] = {}
@@ -45,15 +51,20 @@ async def get_world_ranking(
     for r in races:
         if r.date is None or r.points is None or r.id is None:
             continue
-        race_info[r.id] = {"name": r.name, "date": str(r.date), "points": r.points}
-        if period1_start < r.date <= as_of:
+        race_info[r.id] = {
+            "name": r.name,
+            "date": str(r.date),
+            "points": r.points,
+            "is_future": r.date > today,
+        }
+        if period1_start < r.date <= cutoff:
             period1_race_ids.add(r.id)
         elif period2_start < r.date <= period1_start:
             period2_race_ids.add(r.id)
 
     all_race_ids = period1_race_ids | period2_race_ids
     if not all_race_ids:
-        return _empty_response(program_name, as_of_date, period1_start, period2_start)
+        return _empty_response(program_name, as_of_date, period1_start, period2_start, include_predictions)
 
     # 対象レースの完走結果を取得
     results = session.exec(
@@ -100,12 +111,14 @@ async def get_world_ranking(
 
         # 貢献レース詳細
         p1_races = sorted(
-            [{"race_id": rid, "race_name": race_info[rid]["name"], "date": race_info[rid]["date"], "points": pts}
+            [{"race_id": rid, "race_name": race_info[rid]["name"], "date": race_info[rid]["date"],
+              "points": pts, "is_future": race_info[rid]["is_future"]}
              for rid, pts in p1_pts.items()],
             key=lambda x: x["points"], reverse=True
         )
         p2_races = sorted(
-            [{"race_id": rid, "race_name": race_info[rid]["name"], "date": race_info[rid]["date"], "points": pts}
+            [{"race_id": rid, "race_name": race_info[rid]["name"], "date": race_info[rid]["date"],
+              "points": pts, "is_future": race_info[rid]["is_future"]}
              for rid, pts in p2_pts.items()],
             key=lambda x: x["points"], reverse=True
         )
@@ -129,6 +142,7 @@ async def get_world_ranking(
     return {
         "program_name": program_name,
         "as_of_date": as_of_date,
+        "include_predictions": include_predictions,
         "current_start": str(period1_start + timedelta(days=1)),
         "current_end": as_of_date,
         "previous_start": str(period2_start + timedelta(days=1)),
@@ -137,10 +151,13 @@ async def get_world_ranking(
     }
 
 
-def _empty_response(program_name: str, as_of_date: str, period1_start: date, period2_start: date) -> dict:
+def _empty_response(
+    program_name: str, as_of_date: str, period1_start: date, period2_start: date, include_predictions: bool = False
+) -> dict:
     return {
         "program_name": program_name,
         "as_of_date": as_of_date,
+        "include_predictions": include_predictions,
         "current_start": str(period1_start + timedelta(days=1)),
         "current_end": as_of_date,
         "previous_start": str(period2_start + timedelta(days=1)),
