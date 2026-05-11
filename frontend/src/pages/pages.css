@@ -346,13 +346,13 @@
 }
 
 .difficulty-chip.harder {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
 }
 
 .difficulty-chip.easier {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  background: rgba(22, 163, 74, 0.1);
+  color: #16a34a;
 }
 
 .race-row-expandable {
@@ -407,13 +407,13 @@
 }
 
 .reversal-up {
-  color: #4ade80;
+  color: #16a34a;
   font-weight: 700;
   font-size: 0.9rem;
 }
 
 .reversal-down {
-  color: #f87171;
+  color: #dc2626;
   font-weight: 700;
   font-size: 0.9rem;
 }
@@ -453,12 +453,12 @@
 }
 
 .diff-fast {
-  color: #4ade80;
+  color: #16a34a;
   font-weight: 600;
 }
 
 .diff-slow {
-  color: #f87171;
+  color: #dc2626;
   font-weight: 600;
 }
 
@@ -757,13 +757,13 @@
 }
 
 .rank-up {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  background: rgba(22, 163, 74, 0.1);
+  color: #16a34a;
 }
 
 .rank-down {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
 }
 
 .rank-same {
@@ -772,9 +772,8 @@
 }
 
 .rank-new {
-  background: rgba(var(--accent-rgb, 99, 179, 237), 0.15);
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
+  background: rgba(30, 107, 186, 0.1);
+  color: var(--accent);
 }
 
 /* Admin アップロードページ */

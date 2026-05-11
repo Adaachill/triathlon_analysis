@@ -6,13 +6,18 @@ import RaceDetail from './pages/RaceDetail'
 import AthleteDetail from './pages/AthleteDetail'
 import Predict from './pages/Predict'
 import Admin from './pages/Admin'
+import Guide from './pages/Guide'
 
 function App() {
   return (
     <div className="app">
       <header className="header">
+        <h1 className="logo">Triathlon Analysis</h1>
         <nav className="nav">
-          <NavLink to="/" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+          <NavLink to="/guide" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            使い方
+          </NavLink>
+          <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             ランキング
           </NavLink>
           <NavLink to="/races" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
@@ -22,15 +27,15 @@ function App() {
             予想リザルト
           </NavLink>
           <NavLink to="/admin" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            レース結果アップロード
+            アップロード
           </NavLink>
         </nav>
-        <h1 className="logo">Triathlon Analysis</h1>
       </header>
 
       <main className="main">
         <Routes>
           <Route path="/" element={<Rankings />} />
+          <Route path="/guide" element={<Guide />} />
           <Route path="/races" element={<Races />} />
           <Route path="/races/:raceId" element={<RaceDetail />} />
           <Route path="/athletes/:athleteId" element={<AthleteDetail />} />
