@@ -54,7 +54,12 @@ def import_excel_file(
     if missing:
         raise ValueError(f"Columns missing in {path}: {missing}")
 
-    event_id = str(df["Event ID"].iloc[0])
+    # Event IDが数値の場合、pandasがfloatで読む（例: 188993.0）ため整数文字列に正規化する
+    raw_event_id = df["Event ID"].iloc[0]
+    try:
+        event_id = str(int(float(str(raw_event_id).strip())))
+    except (ValueError, TypeError):
+        event_id = str(raw_event_id).strip()
 
     parsed_date: date_type | None = None
     if race_date_str:
@@ -85,9 +90,16 @@ def import_excel_file(
     session.commit()
     session.refresh(race)
 
-    # 既存結果を削除
-    session.exec(delete(Result).where(Result.race_id == race.id))
-    session.commit()
+    # アップロードされたファイルに含まれるプログラム名のみを対象に削除
+    # （同じEvent IDでも別カテゴリのデータを消さないようにするため）
+    programs_in_file = list({str(v) for v in df["Program Name"].dropna().unique()})
+    session.exec(
+        delete(Result).where(
+            Result.race_id == race.id,
+            Result.program_name.in_(programs_in_file),
+        )
+    )
+    # 削除と追加を同一トランザクションにまとめる（中間コミットしない）
 
     # 行ごとにResultを追加
     added_count = 0
