@@ -3,7 +3,7 @@ from fastapi import APIRouter, Query, Depends
 from sqlmodel import Session, select
 from app.deps import get_db
 from app.models import Result
-from app.services.als_optimizer import get_optimized_program, compute_optimized_program
+from app.services.als_optimizer import get_optimized_program, compute_optimized_unified
 
 router = APIRouter(prefix="/rankings", tags=["rankings"])
 
@@ -91,10 +91,9 @@ async def get_rankings_diff(
     strengths_after = opt_after["athlete_strengths"]
 
     # 追加前（new_race_id を除外）のランキング
-    opt_before = compute_optimized_program(
-        session, program_name, exclude_race_ids={new_race_id}
-    )
-    strengths_before = opt_before["athlete_strengths"]
+    unified_before = compute_optimized_unified(session, exclude_race_ids={new_race_id})
+    opt_before = unified_before["program_results"].get(program_name, {})
+    strengths_before = opt_before.get("athlete_strengths", {})
 
     def _make_ranking(strengths: dict) -> dict[str, int]:
         """strength 昇順で順位辞書を返す"""
