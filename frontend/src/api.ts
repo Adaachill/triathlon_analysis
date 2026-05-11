@@ -56,6 +56,7 @@ export interface Race {
   date: string | null;
   location: string | null;
   is_reference: boolean;
+  points?: number | null;
   note?: string | null;
 }
 
@@ -63,6 +64,7 @@ export interface RaceUpdateBody {
   name?: string | null;
   date?: string | null;
   location?: string | null;
+  points?: number | null;
   note?: string | null;
 }
 

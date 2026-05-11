@@ -23,7 +23,7 @@ export default function RaceDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', date: '', location: '', note: '' })
+  const [editForm, setEditForm] = useState({ name: '', date: '', location: '', points: '', note: '' })
   const [saving, setSaving] = useState(false)
   const [expandedAthletes, setExpandedAthletes] = useState<Set<string>>(new Set())
 
@@ -88,6 +88,7 @@ export default function RaceDetail() {
       name: race.name ?? '',
       date: race.date ?? '',
       location: race.location ?? '',
+      points: race.points != null ? String(race.points) : '',
       note: race.note ?? '',
     })
     setEditing(true)
@@ -97,10 +98,12 @@ export default function RaceDetail() {
     if (!raceId) return
     setSaving(true)
     try {
-      const body: { name?: string; date?: string; location?: string; note?: string } = {}
+      const body: { name?: string; date?: string; location?: string; points?: number; note?: string } = {}
       if (editForm.name !== (race.name ?? '')) body.name = editForm.name || ''
       if (editForm.date !== (race.date ?? '')) body.date = editForm.date || ''
       if (editForm.location !== (race.location ?? '')) body.location = editForm.location || ''
+      const newPoints = editForm.points !== '' ? Number(editForm.points) : null
+      if (newPoints !== (race.points ?? null) && newPoints != null) body.points = newPoints
       if (editForm.note !== (race.note ?? '')) body.note = editForm.note || ''
       if (Object.keys(body).length === 0) {
         setEditing(false)
@@ -164,6 +167,18 @@ export default function RaceDetail() {
               開催国 <input value={editForm.location} onChange={(e) => setEditForm((f) => ({ ...f, location: e.target.value }))} placeholder="例: Australia" />
             </label>
             <label>
+              優勝ポイント（150〜750）
+              <input
+                type="number"
+                value={editForm.points}
+                onChange={(e) => setEditForm((f) => ({ ...f, points: e.target.value }))}
+                min={150}
+                max={750}
+                step={1}
+                placeholder="例: 750"
+              />
+            </label>
+            <label>
               メモ <input value={editForm.note} onChange={(e) => setEditForm((f) => ({ ...f, note: e.target.value }))} placeholder="任意" />
             </label>
             <div className="form-actions">
@@ -179,6 +194,7 @@ export default function RaceDetail() {
 
         {!editing && race.date && <p className="race-meta">日付: {race.date}</p>}
         {!editing && race.location && <p className="race-meta">開催国: {race.location}</p>}
+        {!editing && race.points != null && <p className="race-meta">優勝ポイント: {race.points}pt</p>}
         {!editing && race.note && <p className="race-meta">メモ: {race.note}</p>}
         {(difficulty_offset != null || difficulty_cross != null || difficulty_als != null) && (
           <div className="difficulty-block">

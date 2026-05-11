@@ -25,6 +25,7 @@ class RaceUpdate(BaseModel):
     name: Optional[str] = None
     date: Optional[str] = None  # "YYYY-MM-DD" 形式
     location: Optional[str] = None
+    points: Optional[int] = None
     note: Optional[str] = None
 
 
@@ -39,6 +40,7 @@ async def list_races(session: Session = Depends(get_db)):
         "date": str(r.date) if r.date else None,
         "location": r.location,
         "is_reference": r.is_reference,
+        "points": r.points,
         "note": r.note,
     } for r in races]
 
@@ -171,6 +173,7 @@ async def get_race(
             "date": str(race.date) if race.date else None,
             "location": race.location,
             "is_reference": race.is_reference,
+            "points": race.points,
             "note": race.note,
         },
         "difficulty_offset": difficulty,
@@ -208,6 +211,11 @@ async def update_race(
             race.date = None
     if body.location is not None:
         race.location = body.location if body.location else None
+    if body.points is not None:
+        if not (150 <= body.points <= 750):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=422, detail="pointsは150〜750の整数で指定してください")
+        race.points = body.points
     if body.note is not None:
         race.note = body.note if body.note else None
 
@@ -223,6 +231,7 @@ async def update_race(
             "date": str(race.date) if race.date else None,
             "location": race.location,
             "is_reference": race.is_reference,
+            "points": race.points,
             "note": race.note,
         },
     }
