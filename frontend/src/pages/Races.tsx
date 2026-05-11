@@ -5,17 +5,19 @@ import './pages.css'
 
 export default function Races() {
   const [races, setRaces] = useState<Awaited<ReturnType<typeof api.getRaces>>>([])
-  const [programs, setPrograms] = useState<string[]>([])
-  const [program, setProgram] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([api.getRaces(), api.getPrograms()])
-      .then(([r, p]) => {
-        setRaces(r)
-        setPrograms(p.programs)
-        setProgram(p.programs.includes('PTS4 Men') ? 'PTS4 Men' : (p.programs[0] ?? ''))
+    api.getRaces()
+      .then((r) => {
+        const sorted = [...r].sort((a, b) => {
+          if (!a.date && !b.date) return 0
+          if (!a.date) return 1
+          if (!b.date) return -1
+          return b.date.localeCompare(a.date)
+        })
+        setRaces(sorted)
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
@@ -29,31 +31,36 @@ export default function Races() {
       <div className="card">
         <div className="page-header">
           <h2>レース一覧</h2>
-          <select value={program} onChange={(e) => setProgram(e.target.value)}>
-            {programs.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
         </div>
 
-        <p className="desc">
-          レースをクリックすると、該当カテゴリの結果と標準化タイムを表示します。
-        </p>
-
-        <div className="race-grid">
-          {races.map((race) => (
-            <Link
-              key={race.id}
-              to={`/races/${race.id}${program ? `?program=${encodeURIComponent(program)}` : ''}`}
-              className="race-card"
-            >
-              <span className="race-id">ID: {race.id}</span>
-              <span className="race-event">{race.event_id}</span>
-              {race.name && <span className="race-name">{race.name}</span>}
-              {race.date && <span className="race-date">{race.date}</span>}
-              {race.is_reference && <span className="badge">基準</span>}
-            </Link>
-          ))}
+        <div className="table-wrap">
+          <table className="data-table races-table">
+            <thead>
+              <tr>
+                <th>大会名</th>
+                <th>日付</th>
+                <th>大会ID</th>
+                <th>ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {races.map((race) => (
+                <tr key={race.id}>
+                  <td>
+                    <Link to={`/races/${race.id}`} className="race-table-link">
+                      <span className="race-table-name">
+                        {race.name || `Race ${race.event_id}`}
+                      </span>
+                      {race.is_reference && <span className="badge" style={{ marginLeft: '0.5rem' }}>基準</span>}
+                    </Link>
+                  </td>
+                  <td className="race-table-date">{race.date ?? '--'}</td>
+                  <td className="race-table-id">{race.event_id}</td>
+                  <td className="race-table-id">{race.id}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

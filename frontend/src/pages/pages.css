@@ -468,6 +468,92 @@
   border-bottom: none;
 }
 
+/* ===== レース一覧テーブル ===== */
+.races-table .race-table-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.race-table-link {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.race-table-link:hover .race-table-name {
+  color: var(--accent);
+}
+
+.race-table-date {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.race-table-id {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 結果テーブル 表示モード ===== */
+.results-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 0.5rem;
+}
+
+.view-mode-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.view-mode-select {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.88rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.view-mode-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.col-total-highlight {
+  font-weight: 700;
+  color: var(--text) !important;
+}
+
+.time-actual-total {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text) !important;
+  letter-spacing: -0.01em;
+}
+
+.time-standard-total {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--accent) !important;
+  letter-spacing: -0.01em;
+}
+
+.time-actual-muted {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
 /* ===== 予想リザルトページ ===== */
 .predict-page {
   max-width: 1100px;
