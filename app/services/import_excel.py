@@ -37,6 +37,15 @@ def time_to_seconds(value) -> int | None:
     return h * 3600 + m * 60 + sec
 
 
+def normalize_event_id(raw) -> str:
+    """pandasがExcelの数値IDをfloatで読む問題を回避して整数文字列に正規化する。
+    例: 188993.0 -> "188993"。変換不能な場合はそのままstringにする。"""
+    try:
+        return str(int(float(str(raw).strip())))
+    except (ValueError, TypeError):
+        return str(raw).strip()
+
+
 def import_excel_file(
     path: str,
     session: Session,
@@ -52,14 +61,9 @@ def import_excel_file(
 
     missing = [c for c in EXPECTED_COLUMNS if c not in df.columns]
     if missing:
-        raise ValueError(f"Columns missing in {path}: {missing}")
+        raise ValueError(f"必須カラムが不足しています: {missing}")
 
-    # Event IDが数値の場合、pandasがfloatで読む（例: 188993.0）ため整数文字列に正規化する
-    raw_event_id = df["Event ID"].iloc[0]
-    try:
-        event_id = str(int(float(str(raw_event_id).strip())))
-    except (ValueError, TypeError):
-        event_id = str(raw_event_id).strip()
+    event_id = normalize_event_id(df["Event ID"].iloc[0])
 
     parsed_date: date_type | None = None
     if race_date_str:
@@ -72,7 +76,8 @@ def import_excel_file(
     race = session.exec(
         select(Race).where(Race.event_id == event_id)
     ).first()
-    if race is None:
+    is_new_race = race is None
+    if is_new_race:
         race = Race(event_id=event_id)
         if event_id == REFERENCE_EVENT_ID:
             race.is_reference = True
@@ -90,15 +95,19 @@ def import_excel_file(
     session.commit()
     session.refresh(race)
 
-    # アップロードされたファイルに含まれるプログラム名のみを対象に削除
-    # （同じEvent IDでも別カテゴリのデータを消さないようにするため）
-    programs_in_file = list({str(v) for v in df["Program Name"].dropna().unique()})
-    session.exec(
-        delete(Result).where(
-            Result.race_id == race.id,
-            Result.program_name.in_(programs_in_file),
+    # 再アップロード時のみ既存結果を削除する。
+    # 新規レースはスキップ（SQLiteがAUTOINCREMENTなしでidを再利用するため、
+    # 削除済みidを採番された場合に別レースのResultsを誤削除するリスクを防ぐ）。
+    if not is_new_race:
+        # アップロードファイルに含まれるプログラムのみ対象にすることで、
+        # 同じevent_idの別カテゴリデータを消さない
+        programs_in_file = list({str(v) for v in df["Program Name"].dropna().unique()})
+        session.exec(
+            delete(Result).where(
+                Result.race_id == race.id,
+                Result.program_name.in_(programs_in_file),
+            )
         )
-    )
     # 削除と追加を同一トランザクションにまとめる（中間コミットしない）
 
     # 行ごとにResultを追加
