@@ -247,6 +247,7 @@ export interface WorldRankingRace {
   race_name: string | null;
   date: string;
   points: number;
+  is_future: boolean;
 }
 
 export interface WorldRankingEntry {
@@ -265,6 +266,7 @@ export interface WorldRankingEntry {
 export interface WorldRankingResponse {
   program_name: string;
   as_of_date: string;
+  include_predictions: boolean;
   current_start: string;
   current_end: string;
   previous_start: string;
@@ -304,8 +306,12 @@ export const api = {
     form.append('file', file);
     return uploadApi<PredictResponse>('/predict/upload-startlist', form);
   },
-  getWorldRanking: (programName: string, asOfDate: string) =>
-    fetchApi<WorldRankingResponse>('/world-ranking', { program_name: programName, as_of_date: asOfDate }),
+  getWorldRanking: (programName: string, asOfDate: string, includePredictions = false) =>
+    fetchApi<WorldRankingResponse>('/world-ranking', {
+      program_name: programName,
+      as_of_date: asOfDate,
+      include_predictions: String(includePredictions),
+    }),
   uploadRaceResult: (params: {
     file: File;
     race_name: string;

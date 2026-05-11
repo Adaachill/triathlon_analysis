@@ -185,3 +185,130 @@
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* 基準日モード切替 */
+.wr-date-mode-toggle {
+  display: flex;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.wr-mode-btn {
+  flex: 1;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.88rem;
+  font-family: inherit;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.wr-mode-btn + .wr-mode-btn {
+  border-left: 1px solid var(--border);
+}
+
+.wr-mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.wr-mode-btn:hover:not(.active) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.wr-race-select {
+  font-family: inherit;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.95rem;
+  min-width: 280px;
+}
+
+.wr-race-date-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.wr-race-date-hint strong {
+  color: var(--text);
+}
+
+/* 未来の基準日お知らせ */
+.wr-future-notice {
+  background: rgba(30, 107, 186, 0.07);
+  border: 1px solid rgba(30, 107, 186, 0.2);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.9rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+
+/* 予測結果トグル行 */
+.wr-predictions-row {
+  margin-bottom: 0.75rem;
+}
+
+.wr-predictions-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.wr-predictions-toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.wr-predictions-checkbox {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.wr-predictions-text {
+  color: var(--text);
+}
+
+.wr-coming-soon-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  background: rgba(107, 114, 128, 0.12);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.wr-predictions-note {
+  margin: 0.35rem 0 0 1.4rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* 予測レースバッジ */
+.wr-future-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  background: rgba(234, 179, 8, 0.15);
+  color: #92400e;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  border-radius: 4px;
+  margin-left: 0.3rem;
+  letter-spacing: 0.03em;
+}
