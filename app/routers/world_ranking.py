@@ -129,10 +129,10 @@ async def get_world_ranking(
     return {
         "program_name": program_name,
         "as_of_date": as_of_date,
-        "period1_start": str(period1_start + timedelta(days=1)),
-        "period1_end": as_of_date,
-        "period2_start": str(period2_start + timedelta(days=1)),
-        "period2_end": str(period1_start),
+        "current_start": str(period1_start + timedelta(days=1)),
+        "current_end": as_of_date,
+        "previous_start": str(period2_start + timedelta(days=1)),
+        "previous_end": str(period1_start),
         "rankings": rankings,
     }
 
@@ -141,9 +141,9 @@ def _empty_response(program_name: str, as_of_date: str, period1_start: date, per
     return {
         "program_name": program_name,
         "as_of_date": as_of_date,
-        "period1_start": str(period1_start + timedelta(days=1)),
-        "period1_end": as_of_date,
-        "period2_start": str(period2_start + timedelta(days=1)),
-        "period2_end": str(period1_start),
+        "current_start": str(period1_start + timedelta(days=1)),
+        "current_end": as_of_date,
+        "previous_start": str(period2_start + timedelta(days=1)),
+        "previous_end": str(period1_start),
         "rankings": [],
     }

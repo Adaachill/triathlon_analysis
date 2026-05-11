@@ -273,10 +273,10 @@ export interface WorldRankingEntry {
 export interface WorldRankingResponse {
   program_name: string;
   as_of_date: string;
-  period1_start: string;
-  period1_end: string;
-  period2_start: string;
-  period2_end: string;
+  current_start: string;
+  current_end: string;
+  previous_start: string;
+  previous_end: string;
   rankings: WorldRankingEntry[];
 }
 
