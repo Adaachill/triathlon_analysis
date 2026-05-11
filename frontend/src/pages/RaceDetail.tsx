@@ -212,112 +212,13 @@ export default function RaceDetail() {
         {!editing && race.location && <p className="race-meta">開催国: {race.location}</p>}
         {!editing && race.points != null && <p className="race-meta">優勝ポイント: {race.points}pt</p>}
         {!editing && race.note && <p className="race-meta">メモ: {race.note}</p>}
-        {(difficulty_offset != null || difficulty_cross != null || difficulty_als != null) && (
-          <div className="difficulty-block">
-            <div className="difficulty-compare-grid">
-              {/* 同一プログラム難易度 */}
-              <div className="difficulty-col">
-                <p className="difficulty-col-label">難易度（同カテゴリ, N={difficulty_n}）</p>
-                {difficulty_offset != null ? (
-                  <>
-                    <p className="race-meta">
-                      合計: <strong>{difficulty_offset >= 0 ? '+' : ''}{Math.round(difficulty_offset)}秒</strong>
-                      <span className="difficulty-note">（基準レースより{difficulty_offset >= 0 ? '厳しい' : '易しい'}コース）</span>
-                    </p>
-                    {difficulty_segments && (
-                      <div className="difficulty-segments">
-                        {[
-                          { label: 'スイム', value: difficulty_segments.swim_sec, n: difficulty_segments_n?.swim_sec },
-                          { label: 'T1',     value: difficulty_segments.t1_sec,   n: difficulty_segments_n?.t1_sec   },
-                          { label: 'バイク', value: difficulty_segments.bike_sec, n: difficulty_segments_n?.bike_sec },
-                          { label: 'T2',     value: difficulty_segments.t2_sec,   n: difficulty_segments_n?.t2_sec   },
-                          { label: 'ラン',   value: difficulty_segments.run_sec,  n: difficulty_segments_n?.run_sec  },
-                        ].map(({ label, value, n }) => (
-                          <span key={label} className={`difficulty-chip ${value >= 0 ? 'harder' : 'easier'}`}>
-                            {label}: {value >= 0 ? '+' : ''}{Math.round(value)}秒{n != null ? ` (N=${n})` : ''}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="race-meta difficulty-na">共通選手なし</p>
-                )}
-              </div>
-
-              {/* クロスプログラム難易度 */}
-              <div className="difficulty-col">
-                <p className="difficulty-col-label">難易度（クロスカテゴリ, N={difficulty_n_cross}）</p>
-                {difficulty_cross != null ? (
-                  <>
-                    <p className="race-meta">
-                      合計: <strong>{difficulty_cross >= 0 ? '+' : ''}{Math.round(difficulty_cross)}秒</strong>
-                      <span className="difficulty-note">（基準レースより{difficulty_cross >= 0 ? '厳しい' : '易しい'}コース）</span>
-                    </p>
-                    {difficulty_segments_cross && (
-                      <div className="difficulty-segments">
-                        {[
-                          { label: 'スイム', value: difficulty_segments_cross.swim_sec, n: difficulty_segments_n_cross?.swim_sec },
-                          { label: 'T1',     value: difficulty_segments_cross.t1_sec,   n: difficulty_segments_n_cross?.t1_sec   },
-                          { label: 'バイク', value: difficulty_segments_cross.bike_sec, n: difficulty_segments_n_cross?.bike_sec },
-                          { label: 'T2',     value: difficulty_segments_cross.t2_sec,   n: difficulty_segments_n_cross?.t2_sec   },
-                          { label: 'ラン',   value: difficulty_segments_cross.run_sec,  n: difficulty_segments_n_cross?.run_sec  },
-                        ].map(({ label, value, n }) => (
-                          value != null ? (
-                            <span key={label} className={`difficulty-chip ${value >= 0 ? 'harder' : 'easier'}`}>
-                              {label}: {value >= 0 ? '+' : ''}{Math.round(value)}秒{n != null ? ` (N=${n})` : ''}
-                            </span>
-                          ) : (
-                            <span key={label} className="difficulty-chip difficulty-chip-na">
-                              {label}: --
-                            </span>
-                          )
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="race-meta difficulty-na">共通選手なし</p>
-                )}
-              </div>
-
-              {/* ALS最適化難易度 */}
-              <div className="difficulty-col">
-                <p className="difficulty-col-label">難易度（ALS最適化, N={difficulty_n_als}）</p>
-                {difficulty_als != null ? (
-                  <>
-                    <p className="race-meta">
-                      合計: <strong>{difficulty_als >= 0 ? '+' : ''}{Math.round(difficulty_als)}秒</strong>
-                      <span className="difficulty-note">（平均難易度より{difficulty_als >= 0 ? '厳しい' : '易しい'}コース）</span>
-                    </p>
-                    {difficulty_segments_als && (
-                      <div className="difficulty-segments">
-                        {[
-                          { label: 'スイム', value: difficulty_segments_als.swim_sec },
-                          { label: 'T1',     value: difficulty_segments_als.t1_sec   },
-                          { label: 'バイク', value: difficulty_segments_als.bike_sec },
-                          { label: 'T2',     value: difficulty_segments_als.t2_sec   },
-                          { label: 'ラン',   value: difficulty_segments_als.run_sec  },
-                        ].map(({ label, value }) => (
-                          value != null ? (
-                            <span key={label} className={`difficulty-chip ${value >= 0 ? 'harder' : 'easier'}`}>
-                              {label}: {value >= 0 ? '+' : ''}{Math.round(value)}秒
-                            </span>
-                          ) : (
-                            <span key={label} className="difficulty-chip difficulty-chip-na">
-                              {label}: --
-                            </span>
-                          )
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="race-meta difficulty-na">データなし</p>
-                )}
-              </div>
-            </div>
-          </div>
+        {!editing && difficulty_als != null && (
+          <p className="race-meta race-difficulty-subtle">
+            難易度（ALS）: <span className={difficulty_als >= 0 ? 'diff-harder' : 'diff-easier'}>
+              {difficulty_als >= 0 ? '+' : ''}{Math.round(difficulty_als)}秒
+            </span>
+            <span className="difficulty-note">（平均より{difficulty_als >= 0 ? '厳しい' : '易しい'}コース, N={difficulty_n_als}）</span>
+          </p>
         )}
 
         {chartData.length > 0 && (
@@ -585,6 +486,107 @@ export default function RaceDetail() {
             </tbody>
           </table>
         </div>
+        {(difficulty_offset != null || difficulty_cross != null || difficulty_als != null) && (
+          <details className="difficulty-details-toggle">
+            <summary className="difficulty-details-summary">難易度詳細を表示</summary>
+            <div className="difficulty-block">
+              <div className="difficulty-compare-grid">
+                <div className="difficulty-col">
+                  <p className="difficulty-col-label">難易度（同カテゴリ, N={difficulty_n}）</p>
+                  {difficulty_offset != null ? (
+                    <>
+                      <p className="race-meta">
+                        合計: <strong>{difficulty_offset >= 0 ? '+' : ''}{Math.round(difficulty_offset)}秒</strong>
+                        <span className="difficulty-note">（基準レースより{difficulty_offset >= 0 ? '厳しい' : '易しい'}コース）</span>
+                      </p>
+                      {difficulty_segments && (
+                        <div className="difficulty-segments">
+                          {([
+                            { label: 'スイム', value: difficulty_segments.swim_sec, n: difficulty_segments_n?.swim_sec },
+                            { label: 'T1',     value: difficulty_segments.t1_sec,   n: difficulty_segments_n?.t1_sec   },
+                            { label: 'バイク', value: difficulty_segments.bike_sec, n: difficulty_segments_n?.bike_sec },
+                            { label: 'T2',     value: difficulty_segments.t2_sec,   n: difficulty_segments_n?.t2_sec   },
+                            { label: 'ラン',   value: difficulty_segments.run_sec,  n: difficulty_segments_n?.run_sec  },
+                          ] as const).map(({ label, value, n }) => (
+                            <span key={label} className={`difficulty-chip ${value >= 0 ? 'harder' : 'easier'}`}>
+                              {label}: {value >= 0 ? '+' : ''}{Math.round(value)}秒{n != null ? ` (N=${n})` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="race-meta difficulty-na">共通選手なし</p>
+                  )}
+                </div>
+                <div className="difficulty-col">
+                  <p className="difficulty-col-label">難易度（クロスカテゴリ, N={difficulty_n_cross}）</p>
+                  {difficulty_cross != null ? (
+                    <>
+                      <p className="race-meta">
+                        合計: <strong>{difficulty_cross >= 0 ? '+' : ''}{Math.round(difficulty_cross)}秒</strong>
+                        <span className="difficulty-note">（基準レースより{difficulty_cross >= 0 ? '厳しい' : '易しい'}コース）</span>
+                      </p>
+                      {difficulty_segments_cross && (
+                        <div className="difficulty-segments">
+                          {([
+                            { label: 'スイム', value: difficulty_segments_cross.swim_sec, n: difficulty_segments_n_cross?.swim_sec },
+                            { label: 'T1',     value: difficulty_segments_cross.t1_sec,   n: difficulty_segments_n_cross?.t1_sec   },
+                            { label: 'バイク', value: difficulty_segments_cross.bike_sec, n: difficulty_segments_n_cross?.bike_sec },
+                            { label: 'T2',     value: difficulty_segments_cross.t2_sec,   n: difficulty_segments_n_cross?.t2_sec   },
+                            { label: 'ラン',   value: difficulty_segments_cross.run_sec,  n: difficulty_segments_n_cross?.run_sec  },
+                          ] as const).map(({ label, value, n }) => (
+                            value != null ? (
+                              <span key={label} className={`difficulty-chip ${value >= 0 ? 'harder' : 'easier'}`}>
+                                {label}: {value >= 0 ? '+' : ''}{Math.round(value)}秒{n != null ? ` (N=${n})` : ''}
+                              </span>
+                            ) : (
+                              <span key={label} className="difficulty-chip difficulty-chip-na">{label}: --</span>
+                            )
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="race-meta difficulty-na">共通選手なし</p>
+                  )}
+                </div>
+                <div className="difficulty-col">
+                  <p className="difficulty-col-label">難易度（ALS最適化, N={difficulty_n_als}）</p>
+                  {difficulty_als != null ? (
+                    <>
+                      <p className="race-meta">
+                        合計: <strong>{difficulty_als >= 0 ? '+' : ''}{Math.round(difficulty_als)}秒</strong>
+                        <span className="difficulty-note">（平均難易度より{difficulty_als >= 0 ? '厳しい' : '易しい'}コース）</span>
+                      </p>
+                      {difficulty_segments_als && (
+                        <div className="difficulty-segments">
+                          {([
+                            { label: 'スイム', value: difficulty_segments_als.swim_sec },
+                            { label: 'T1',     value: difficulty_segments_als.t1_sec   },
+                            { label: 'バイク', value: difficulty_segments_als.bike_sec },
+                            { label: 'T2',     value: difficulty_segments_als.t2_sec   },
+                            { label: 'ラン',   value: difficulty_segments_als.run_sec  },
+                          ] as const).map(({ label, value }) => (
+                            value != null ? (
+                              <span key={label} className={`difficulty-chip ${value >= 0 ? 'harder' : 'easier'}`}>
+                                {label}: {value >= 0 ? '+' : ''}{Math.round(value)}秒
+                              </span>
+                            ) : (
+                              <span key={label} className="difficulty-chip difficulty-chip-na">{label}: --</span>
+                            )
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="race-meta difficulty-na">データなし</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </details>
+        )}
       </div>
     </div>
   )

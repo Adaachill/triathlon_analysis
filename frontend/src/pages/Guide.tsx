@@ -5,6 +5,17 @@ export default function Guide() {
   return (
     <div className="guide-page">
 
+      {/* サーバー起動通知 */}
+      <div className="guide-server-notice">
+        <strong>⏱ 初回アクセス・久しぶりのアクセスについて</strong>
+        <p>
+          サーバーは一定時間アクセスがないとスリープ状態になります。
+          再起動に <strong>30秒ほど</strong> かかるため、最初にページを開いた際に
+          データが表示されない・エラーが出る場合があります。
+          しばらく待ってからページを再読み込みしてください。
+        </p>
+      </div>
+
       {/* ヒーロー */}
       <div className="guide-hero">
         <h2 className="guide-hero-title">パラトライアスロン 分析ツール</h2>
@@ -34,7 +45,7 @@ export default function Guide() {
           <div className="guide-step">
             <div className="guide-step-num">3</div>
             <div>
-              <div className="guide-step-label"><Link to="/">ランキング</Link> で選手の実力を比較</div>
+              <div className="guide-step-label"><Link to="/rankings">ランキング</Link> で選手の実力を比較</div>
               <p className="guide-step-desc">複数レースを横断した「強さスコア」で選手をランキング。選手名をクリックすると個人の成績推移を確認できます。</p>
             </div>
           </div>
@@ -140,7 +151,7 @@ export default function Guide() {
       <div className="card">
         <h3 className="guide-section-title">主な機能</h3>
         <div className="guide-feature-grid">
-          <Link to="/" className="guide-feature-card">
+          <Link to="/rankings" className="guide-feature-card">
             <div className="guide-feature-icon">🏆</div>
             <div className="guide-feature-name">ランキング</div>
             <p className="guide-feature-desc">強さスコア順の選手ランキング。カテゴリ別に絞り込み可能。</p>

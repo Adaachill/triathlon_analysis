@@ -15,10 +15,10 @@ function App() {
       <header className="header">
         <h1 className="logo">Triathlon Analysis</h1>
         <nav className="nav">
-          <NavLink to="/guide" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+          <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             使い方
           </NavLink>
-          <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+          <NavLink to="/rankings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             ランキング
           </NavLink>
           <NavLink to="/races" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
@@ -38,8 +38,9 @@ function App() {
 
       <main className="main">
         <Routes>
-          <Route path="/" element={<Rankings />} />
+          <Route path="/" element={<Guide />} />
           <Route path="/guide" element={<Guide />} />
+          <Route path="/rankings" element={<Rankings />} />
           <Route path="/races" element={<Races />} />
           <Route path="/races/:raceId" element={<RaceDetail />} />
           <Route path="/athletes/:athleteId" element={<AthleteDetail />} />

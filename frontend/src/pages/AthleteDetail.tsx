@@ -2,7 +2,50 @@ import { useState, useEffect, Fragment } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { api, formatTime, formatDiff } from '../api'
+import type { RankingEntry, AthleteRace } from '../api'
 import './pages.css'
+
+const DAYS = 86400000
+
+function periodBounds() {
+  const now = Date.now()
+  return {
+    cur_start: new Date(now - 365 * DAYS),
+    cur_end:   new Date(now),
+    prv_start: new Date(now - 730 * DAYS),
+    prv_end:   new Date(now - 365 * DAYS),
+  }
+}
+
+function inRange(dateStr: string | null, start: Date, end: Date) {
+  if (!dateStr) return false
+  const d = new Date(dateStr)
+  return d > start && d <= end
+}
+
+function periodAvg(races: AthleteRace[], start: Date, end: Date) {
+  const filtered = races.filter(r => inRange(r.date, start, end))
+  const avg = (key: keyof AthleteRace) => {
+    const vals = filtered.map(r => r[key] as number | null).filter((v): v is number => v != null)
+    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null
+  }
+  return {
+    count: filtered.length,
+    total: avg('standard_total_sec'),
+    swim:  avg('standard_swim_sec'),
+    t1:    avg('standard_t1_sec'),
+    bike:  avg('standard_bike_sec'),
+    t2:    avg('standard_t2_sec'),
+    run:   avg('standard_run_sec'),
+  }
+}
+
+function segRank(rankings: RankingEntry[], athleteId: string, key: keyof RankingEntry) {
+  const valid = rankings.filter(r => r[key] != null)
+  valid.sort((a, b) => (a[key] as number) - (b[key] as number))
+  const idx = valid.findIndex(r => r.athlete_id === athleteId)
+  return idx >= 0 ? { rank: idx + 1, total: valid.length } : null
+}
 
 
 export default function AthleteDetail() {
@@ -15,6 +58,7 @@ export default function AthleteDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedRaces, setExpandedRaces] = useState<Set<number>>(new Set())
+  const [allRankings, setAllRankings] = useState<RankingEntry[] | null>(null)
 
   useEffect(() => {
     api.getPrograms().then((r) => {
@@ -47,6 +91,11 @@ export default function AthleteDetail() {
   useEffect(() => {
     if (program && !selProgram) setSelProgram(program)
   }, [program])
+
+  useEffect(() => {
+    if (!selProgram) return
+    api.getRankings(selProgram, 500).then(r => setAllRankings(r.rankings))
+  }, [selProgram])
 
   const toggleExpand = (raceId: number) => {
     setExpandedRaces((prev) => {
@@ -101,6 +150,66 @@ export default function AthleteDetail() {
           <span title="T2">T2 <strong>{formatTime(data.strength_t2)}</strong></span>
           <span title="Run">Run <strong>{formatTime(data.strength_run)}</strong></span>
         </div>
+
+        {allRankings && (() => {
+          const ranks = [
+            { label: '総合',  key: 'strength'      as keyof RankingEntry },
+            { label: 'Swim',  key: 'strength_swim' as keyof RankingEntry },
+            { label: 'T1',    key: 'strength_t1'   as keyof RankingEntry },
+            { label: 'Bike',  key: 'strength_bike' as keyof RankingEntry },
+            { label: 'T2',    key: 'strength_t2'   as keyof RankingEntry },
+            { label: 'Run',   key: 'strength_run'  as keyof RankingEntry },
+          ].map(({ label, key }) => ({ label, result: segRank(allRankings, data.athlete_id, key) }))
+            .filter(({ result }) => result != null)
+          if (ranks.length === 0) return null
+          return (
+            <div className="athlete-seg-ranks">
+              {ranks.map(({ label, result }) => (
+                <span key={label} className="seg-rank-chip">
+                  {label}: <strong>{result!.rank}位</strong> / {result!.total}人
+                </span>
+              ))}
+            </div>
+          )
+        })()}
+
+        {(() => {
+          const { cur_start, cur_end, prv_start, prv_end } = periodBounds()
+          const cur = periodAvg(data.races, cur_start, cur_end)
+          const prv = periodAvg(data.races, prv_start, prv_end)
+          if (cur.count === 0 && prv.count === 0) return null
+          const rows: { label: string; curVal: number | null; prvVal: number | null }[] = [
+            { label: '合計（標準化平均）', curVal: cur.total, prvVal: prv.total },
+            { label: 'Swim',  curVal: cur.swim,  prvVal: prv.swim  },
+            { label: 'T1',    curVal: cur.t1,    prvVal: prv.t1    },
+            { label: 'Bike',  curVal: cur.bike,  prvVal: prv.bike  },
+            { label: 'T2',    curVal: cur.t2,    prvVal: prv.t2    },
+            { label: 'Run',   curVal: cur.run,   prvVal: prv.run   },
+          ]
+          return (
+            <div className="athlete-period-stats">
+              <div className="period-stats-title">期間別成績（標準化タイム平均）</div>
+              <table className="period-stats-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>今期（過去365日）<br/><span className="period-count">{cur.count}レース</span></th>
+                    <th>前期（366〜730日前）<br/><span className="period-count">{prv.count}レース</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(({ label, curVal, prvVal }) => (
+                    <tr key={label}>
+                      <td className="period-seg-label">{label}</td>
+                      <td className="mono">{formatTime(curVal)}</td>
+                      <td className="mono">{formatTime(prvVal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        })()}
 
         {chartData.length > 0 && (
           <div className="chart-container">
