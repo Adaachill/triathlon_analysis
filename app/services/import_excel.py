@@ -54,7 +54,12 @@ def import_excel_file(
     if missing:
         raise ValueError(f"Columns missing in {path}: {missing}")
 
-    event_id = str(df["Event ID"].iloc[0])
+    # Event IDが数値の場合、pandasがfloatで読む（例: 188993.0）ため整数文字列に正規化する
+    raw_event_id = df["Event ID"].iloc[0]
+    try:
+        event_id = str(int(float(str(raw_event_id).strip())))
+    except (ValueError, TypeError):
+        event_id = str(raw_event_id).strip()
 
     parsed_date: date_type | None = None
     if race_date_str:
