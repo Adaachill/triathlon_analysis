@@ -23,6 +23,12 @@ def init_db() -> None:
             with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE race ADD COLUMN points INTEGER"))
                 conn.commit()
+        # event_id に UNIQUE インデックスが存在しない場合は追加する
+        existing_indexes = [idx["name"] for idx in insp.get_indexes("race")]
+        if "uq_race_event_id" not in existing_indexes:
+            with engine.connect() as conn:
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_race_event_id ON race (event_id)"))
+                conn.commit()
 
 
 def get_session():

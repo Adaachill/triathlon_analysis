@@ -72,7 +72,8 @@ def import_excel_file(
     race = session.exec(
         select(Race).where(Race.event_id == event_id)
     ).first()
-    if race is None:
+    is_new_race = race is None
+    if is_new_race:
         race = Race(event_id=event_id)
         if event_id == REFERENCE_EVENT_ID:
             race.is_reference = True
@@ -90,16 +91,17 @@ def import_excel_file(
     session.commit()
     session.refresh(race)
 
-    # アップロードされたファイルに含まれるプログラム名のみを対象に削除
-    # （同じEvent IDでも別カテゴリのデータを消さないようにするため）
-    programs_in_file = list({str(v) for v in df["Program Name"].dropna().unique()})
-    session.exec(
-        delete(Result).where(
-            Result.race_id == race.id,
-            Result.program_name.in_(programs_in_file),
+    # 再アップロード時のみ既存結果を削除する。
+    # 新規レースの場合はスキップする（SQLiteがAUTOINCREMENTなしで
+    # 削除済みidを再利用するため、別レースのResultsを誤削除するリスクを防ぐ）。
+    if not is_new_race:
+        programs_in_file = list({str(v) for v in df["Program Name"].dropna().unique()})
+        session.exec(
+            delete(Result).where(
+                Result.race_id == race.id,
+                Result.program_name.in_(programs_in_file),
+            )
         )
-    )
-    # 削除と追加を同一トランザクションにまとめる（中間コミットしない）
 
     # 行ごとにResultを追加
     added_count = 0
