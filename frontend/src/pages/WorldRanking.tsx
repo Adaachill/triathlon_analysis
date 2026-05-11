@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../api'
-import type { WorldRankingEntry, Race } from '../api'
+import { api, getUpcomingEvents } from '../api'
+import type { WorldRankingEntry, AlgoliaEvent } from '../api'
 import './pages.css'
 import './WorldRanking.css'
 
@@ -17,13 +17,19 @@ function subtractDays(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10)
 }
 
+function sportLabel(ev: AlgoliaEvent): string {
+  return ev.sport_categories.join(' / ')
+}
+
 export default function WorldRanking() {
   const [programs, setPrograms] = useState<string[]>([])
   const [program, setProgram] = useState('')
   const [dateMode, setDateMode] = useState<DateMode>('direct')
   const [directDate, setDirectDate] = useState(todayStr())
-  const [races, setRaces] = useState<Race[]>([])
-  const [selectedRaceId, setSelectedRaceId] = useState<number | null>(null)
+  const [upcomingEvents, setUpcomingEvents] = useState<AlgoliaEvent[]>([])
+  const [eventsLoading, setEventsLoading] = useState(false)
+  const [eventsError, setEventsError] = useState<string | null>(null)
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null)
   const [includePredictions, setIncludePredictions] = useState(false)
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getWorldRanking>> | null>(null)
   const [loading, setLoading] = useState(false)
@@ -35,25 +41,30 @@ export default function WorldRanking() {
       setPrograms(r.programs)
       setProgram(r.programs[0] ?? '')
     })
-    api.getRaces().then((r) => {
-      const withDate = r.filter((rc) => rc.date != null)
-      withDate.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
-      setRaces(withDate)
-    })
   }, [])
 
+  useEffect(() => {
+    if (dateMode !== 'from_race') return
+    if (upcomingEvents.length > 0) return
+    setEventsLoading(true)
+    setEventsError(null)
+    getUpcomingEvents()
+      .then(setUpcomingEvents)
+      .catch((e) => setEventsError(e.message))
+      .finally(() => setEventsLoading(false))
+  }, [dateMode])
+
+  const selectedEvent = useMemo(
+    () => upcomingEvents.find((e) => e.id === selectedEventId) ?? null,
+    [upcomingEvents, selectedEventId],
+  )
+
   const asOfDate = useMemo(() => {
-    if (dateMode === 'from_race' && selectedRaceId !== null) {
-      const race = races.find((r) => r.id === selectedRaceId)
-      if (race?.date) return subtractDays(race.date, 30)
+    if (dateMode === 'from_race' && selectedEvent) {
+      return subtractDays(selectedEvent.start_date, 30)
     }
     return directDate
-  }, [dateMode, selectedRaceId, races, directDate])
-
-  const selectedRace = useMemo(
-    () => (selectedRaceId != null ? races.find((r) => r.id === selectedRaceId) ?? null : null),
-    [races, selectedRaceId],
-  )
+  }, [dateMode, selectedEvent, directDate])
 
   useEffect(() => {
     if (!program || !asOfDate) return
@@ -76,8 +87,15 @@ export default function WorldRanking() {
 
   const today = todayStr()
   const isFutureDate = asOfDate > today
-  const upcomingRaces = races.filter((r) => r.date != null && r.date > today)
-  const pastRaces = races.filter((r) => r.date != null && r.date <= today)
+
+  const eventsBySport = useMemo(() => {
+    const groups: Record<string, AlgoliaEvent[]> = {}
+    for (const ev of upcomingEvents) {
+      const key = ev.sport_categories.join(', ') || 'Other'
+      ;(groups[key] ??= []).push(ev)
+    }
+    return groups
+  }, [upcomingEvents])
 
   return (
     <div className="wr-page">
@@ -133,36 +151,48 @@ export default function WorldRanking() {
             </div>
           ) : (
             <div className="wr-control-group">
-              <label className="wr-label">大会を選択</label>
-              <select
-                value={selectedRaceId ?? ''}
-                onChange={(e) => setSelectedRaceId(e.target.value ? Number(e.target.value) : null)}
-                className="wr-race-select"
-              >
-                <option value="">-- 大会を選んでください --</option>
-                {upcomingRaces.length > 0 && (
-                  <optgroup label="開催予定">
-                    {[...upcomingRaces].reverse().map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name ?? `Race #${r.id}`}（{r.date}）
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-                {pastRaces.length > 0 && (
-                  <optgroup label="過去の大会">
-                    {[...pastRaces].reverse().map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name ?? `Race #${r.id}`}（{r.date}）
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-              {selectedRace?.date && (
-                <span className="wr-race-date-hint">
-                  基準日: <strong>{asOfDate}</strong>（{selectedRace.date} の30日前）
-                </span>
+              <label className="wr-label">
+                大会を選択
+                <span className="wr-events-source"> (World Triathlon)</span>
+              </label>
+              {eventsLoading && <span className="wr-events-loading">読み込み中...</span>}
+              {eventsError && <span className="wr-events-error">取得失敗: {eventsError}</span>}
+              {!eventsLoading && !eventsError && (
+                <select
+                  value={selectedEventId ?? ''}
+                  onChange={(e) => setSelectedEventId(e.target.value ? Number(e.target.value) : null)}
+                  className="wr-race-select"
+                >
+                  <option value="">-- 大会を選んでください --</option>
+                  {Object.entries(eventsBySport).map(([sport, events]) => (
+                    <optgroup key={sport} label={sport}>
+                      {events.map((ev) => (
+                        <option key={ev.id} value={ev.id}>
+                          {ev.name}（{ev.start_date}{ev.city ? ` / ${ev.city}` : ''}）
+                          {ev.startlist_available ? ' ★' : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              )}
+              {selectedEvent && (
+                <div className="wr-event-detail">
+                  <span className="wr-race-date-hint">
+                    基準日: <strong>{asOfDate}</strong>（{selectedEvent.start_date} の30日前）
+                  </span>
+                  <div className="wr-event-badges">
+                    {selectedEvent.startlist_available && (
+                      <span className="wr-badge wr-badge-startlist">スタートリスト公開済み</span>
+                    )}
+                    {selectedEvent.results_available && (
+                      <span className="wr-badge wr-badge-results">結果あり</span>
+                    )}
+                    <span className="wr-badge wr-badge-sport">
+                      {sportLabel(selectedEvent)}
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
           )}
