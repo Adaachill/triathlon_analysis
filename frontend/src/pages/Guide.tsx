@@ -1,5 +1,174 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { api } from '../api'
+import type { EvalResult } from '../api'
 import './Guide.css'
+
+const MODEL_LABELS: Record<string, string> = {
+  old_als: '旧ALS',
+  unified: '新統合ALS',
+  same_cat: '同一カテゴリ',
+  cross_cat: 'クロスカテゴリ',
+}
+
+const MODEL_COLORS: Record<string, string> = {
+  old_als: 'var(--text-muted)',
+  unified: 'var(--accent)',
+  same_cat: '#f59e0b',
+  cross_cat: '#8b5cf6',
+}
+
+const SEG_LABELS: Record<string, string> = {
+  total_sec: '合計',
+  swim_sec: 'Swim',
+  t1_sec: 'T1',
+  bike_sec: 'Bike',
+  t2_sec: 'T2',
+  run_sec: 'Run',
+}
+
+function EvalSection() {
+  const [evalData, setEvalData] = useState<EvalResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const run = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await api.getEvaluation()
+      setEvalData(result)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const summaryChartData = evalData
+    ? Object.entries(evalData.summary).map(([key, stat]) => ({
+        model: MODEL_LABELS[key] ?? key,
+        key,
+        mae: stat.mae_sec,
+        n: stat.n,
+      }))
+    : []
+
+  const segChartData = evalData
+    ? Object.entries(SEG_LABELS).map(([field, label]) => ({
+        seg: label,
+        旧ALS: evalData.by_segment['old_als']?.[field]?.mae_sec ?? null,
+        新統合ALS: evalData.by_segment['unified']?.[field]?.mae_sec ?? null,
+      }))
+    : []
+
+  const programRows = evalData
+    ? Object.entries(evalData.by_program)
+        .filter(([, stats]) => stats['unified']?.n > 0)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+    : []
+
+  return (
+    <div className="card">
+      <h3 className="guide-section-title">予測精度チェック</h3>
+      <p className="guide-eval-desc">
+        過去レースのレースアウト交差検証（LOOCV）による予測タイムの平均誤差（MAE）を確認できます。
+        計算に数十秒かかる場合があります。
+      </p>
+      <button
+        className="guide-eval-btn"
+        onClick={run}
+        disabled={loading}
+      >
+        {loading ? '計算中...' : '精度を確認する'}
+      </button>
+
+      {error && <p className="guide-eval-error">{error}</p>}
+
+      {evalData && (
+        <div className="guide-eval-results">
+          <p className="guide-eval-meta">評価レース数: {evalData.n_races_evaluated}レース</p>
+
+          {/* モデル別MAE棒グラフ */}
+          <div className="guide-eval-chart-section">
+            <div className="guide-eval-chart-title">モデル別 MAE（秒） — 値が小さいほど精度が高い</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={summaryChartData} margin={{ top: 8, right: 20, left: 0, bottom: 4 }}>
+                <XAxis dataKey="model" tick={{ fontSize: 12 }} />
+                <YAxis unit="秒" tick={{ fontSize: 11 }} />
+                <Tooltip
+                  formatter={(v: number) => [`${v.toFixed(1)}秒`, 'MAE']}
+                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+                />
+                <Bar dataKey="mae" radius={[4, 4, 0, 0]}>
+                  {summaryChartData.map((entry) => (
+                    <Cell key={entry.key} fill={MODEL_COLORS[entry.key] ?? 'var(--accent)'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* セグメント別比較（旧ALS vs 新統合ALS） */}
+          <div className="guide-eval-chart-section">
+            <div className="guide-eval-chart-title">セグメント別 MAE（旧ALS vs 新統合ALS）</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={segChartData} margin={{ top: 8, right: 20, left: 0, bottom: 4 }}>
+                <XAxis dataKey="seg" tick={{ fontSize: 12 }} />
+                <YAxis unit="秒" tick={{ fontSize: 11 }} />
+                <Tooltip
+                  formatter={(v: number, name: string) => [`${v.toFixed(1)}秒`, name]}
+                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+                />
+                <Bar dataKey="旧ALS" fill={MODEL_COLORS['old_als']} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="新統合ALS" fill={MODEL_COLORS['unified']} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* カテゴリ別テーブル */}
+          {programRows.length > 0 && (
+            <div className="guide-eval-chart-section">
+              <div className="guide-eval-chart-title">カテゴリ別 MAE（秒）</div>
+              <div className="guide-eval-table-wrap">
+                <table className="guide-eval-table">
+                  <thead>
+                    <tr>
+                      <th>カテゴリ</th>
+                      <th>旧ALS</th>
+                      <th>新統合ALS</th>
+                      <th>改善</th>
+                      <th>N</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {programRows.map(([prog, stats]) => {
+                      const oldMae = stats['old_als']?.mae_sec
+                      const newMae = stats['unified']?.mae_sec
+                      const improved = oldMae != null && newMae != null ? oldMae - newMae : null
+                      return (
+                        <tr key={prog}>
+                          <td>{prog}</td>
+                          <td className="mono">{oldMae != null ? `${oldMae.toFixed(1)}` : '--'}</td>
+                          <td className="mono">{newMae != null ? `${newMae.toFixed(1)}` : '--'}</td>
+                          <td className={improved == null ? 'mono' : improved > 0 ? 'mono eval-improved' : improved < 0 ? 'mono eval-worsened' : 'mono'}>
+                            {improved != null ? `${improved > 0 ? '-' : '+'}${Math.abs(improved).toFixed(1)}秒` : '--'}
+                          </td>
+                          <td className="mono">{stats['unified']?.n ?? '--'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Guide() {
   return (
@@ -90,13 +259,9 @@ export default function Guide() {
                 プラスなら基準より厳しいコース、マイナスなら易しいコースです。
               </p>
               <p>
-                計算方法は3種類あり、それぞれ別の角度でコース難易度を推定します：
+                交互最小二乗法（ALS）で全カテゴリのデータを横断的に使い、
+                選手の強さとレース難易度を同時に最適化して算出します。
               </p>
-              <ul className="guide-list">
-                <li><strong>同カテゴリ方式</strong>：同じ障がいクラスで複数レースに出場した選手の成績差から推定</li>
-                <li><strong>クロスカテゴリ方式</strong>：異なる障がいクラスをまたいで共通選手の成績差から推定</li>
-                <li><strong>ALS最適化方式</strong>：交互最小二乗法（ALS）で選手の強さとレース難易度を同時に最適化</li>
-              </ul>
             </div>
           </details>
 
@@ -146,6 +311,9 @@ export default function Guide() {
 
         </div>
       </div>
+
+      {/* 予測精度チェック */}
+      <EvalSection />
 
       {/* 機能一覧カード */}
       <div className="card">

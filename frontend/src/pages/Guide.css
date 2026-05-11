@@ -182,6 +182,106 @@
   margin-bottom: 0.3rem;
 }
 
+/* 評価セクション */
+.guide-eval-desc {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin: 0 0 1rem;
+  line-height: 1.6;
+}
+
+.guide-eval-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 1.4rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.guide-eval-btn:hover {
+  opacity: 0.85;
+}
+
+.guide-eval-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.guide-eval-error {
+  margin-top: 0.75rem;
+  color: var(--danger);
+  font-size: 0.88rem;
+}
+
+.guide-eval-results {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.guide-eval-meta {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.guide-eval-chart-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.guide-eval-chart-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.guide-eval-table-wrap {
+  overflow-x: auto;
+}
+
+.guide-eval-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.guide-eval-table th,
+.guide-eval-table td {
+  padding: 0.4rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.guide-eval-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.guide-eval-table td.mono {
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.eval-improved {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.eval-worsened {
+  color: #f87171;
+  font-weight: 600;
+}
+
 /* 機能カード */
 .guide-feature-grid {
   display: grid;

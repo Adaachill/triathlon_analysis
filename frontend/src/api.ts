@@ -272,6 +272,19 @@ export interface WorldRankingResponse {
   rankings: WorldRankingEntry[];
 }
 
+export interface EvalModelStat {
+  mae_sec: number;
+  rmse_sec: number;
+  n: number;
+}
+
+export interface EvalResult {
+  summary: Record<string, EvalModelStat>;
+  by_segment: Record<string, Record<string, EvalModelStat>>;
+  by_program: Record<string, Record<string, EvalModelStat>>;
+  n_races_evaluated: number;
+}
+
 export const api = {
   getPrograms: () => fetchApi<Program>('/programs'),
   getRaces: () => fetchApi<Race[]>('/races'),
@@ -285,6 +298,7 @@ export const api = {
     fetchApi<RankingsDiffResponse>('/rankings/diff', { program_name: programName, new_race_id: String(newRaceId) }),
   getAthlete: (athleteId: string, programName: string) =>
     fetchApi<AthleteDetail>(`/athletes/${athleteId}`, { program_name: programName }),
+  getEvaluation: () => fetchApi<EvalResult>('/admin/evaluate_difficulty'),
   uploadStartlist: (file: File) => {
     const form = new FormData();
     form.append('file', file);
