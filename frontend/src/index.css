@@ -1,16 +1,16 @@
-/* Triathlon Analysis - ダーク系・スポーツ感のあるテーマ */
+/* Triathlon Analysis - ライト系・白ベース＋青テーマ */
 :root {
-  --bg: #0f1419;
-  --bg-card: #1a2332;
-  --bg-hover: #243044;
-  --text: #e6edf3;
-  --text-muted: #8b9eb5;
-  --accent: #00d4aa;
-  --accent-dim: #00a884;
-  --accent-glow: rgba(0, 212, 170, 0.3);
-  --danger: #ff6b6b;
-  --success: #51cf66;
-  --border: #2d3a4d;
+  --bg: #f4f7fb;
+  --bg-card: #ffffff;
+  --bg-hover: #eaf0f8;
+  --text: #111827;
+  --text-muted: #6b7280;
+  --accent: #1e6bba;
+  --accent-dim: #1557a0;
+  --accent-glow: rgba(30, 107, 186, 0.15);
+  --danger: #dc2626;
+  --success: #16a34a;
+  --border: #dde3ea;
   --radius: 12px;
   --font-sans: 'DM Sans', 'Noto Sans JP', -apple-system, sans-serif;
 }
