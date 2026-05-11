@@ -6,13 +6,18 @@ import './WtImport.css'
 
 const POINTS_OPTIONS = [700, 550, 500, 450, 350]
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export default function WtImport() {
   const [yearsBack, setYearsBack] = useState(3)
   const [events, setEvents] = useState<WtParaEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [bulkRunning, setBulkRunning] = useState(false)
 
-  // インポート中イベントの状態 id -> 'loading' | 'done' | 'error:{msg}'
+  // インポート中イベントの状態 id -> 'loading' | 'done:{n}' | 'skipped' | 'error:{msg}'
   const [importState, setImportState] = useState<Record<number, string>>({})
 
   // 編集可能な優勝ポイント id -> number
@@ -26,6 +31,7 @@ export default function WtImport() {
     setLoading(true)
     setFetchError(null)
     setEvents([])
+    setImportState({})
     try {
       const res = await api.getWtParaEvents(yearsBack)
       setEvents(res.events)
@@ -43,7 +49,7 @@ export default function WtImport() {
 
   useEffect(() => { fetchEvents() }, [])
 
-  async function handleImport(ev: WtParaEvent) {
+  async function doImport(ev: WtParaEvent, force = false) {
     const pts = getPoints(ev)
     if (!pts) return
     setImportState((s) => ({ ...s, [ev.id]: 'loading' }))
@@ -54,17 +60,38 @@ export default function WtImport() {
         race_name: ev.name,
         race_date: ev.start_date,
         note: ev.event_categories.join(', '),
+        force,
       })
-      setImportState((s) => ({ ...s, [ev.id]: `done:${res.added_results}` }))
-      setEvents((prev) => prev.map((e) => e.id === ev.id ? { ...e, imported: true } : e))
+      if (res.skipped) {
+        setImportState((s) => ({ ...s, [ev.id]: 'skipped' }))
+      } else {
+        setImportState((s) => ({ ...s, [ev.id]: `done:${res.added_results}` }))
+        setEvents((prev) => prev.map((e) => e.id === ev.id ? { ...e, imported: true } : e))
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : '失敗'
       setImportState((s) => ({ ...s, [ev.id]: `error:${msg}` }))
     }
   }
 
+  async function handleBulkImport() {
+    const targets = events.filter(
+      (ev) => ev.win_points != null && !ev.imported && importState[ev.id] == null
+    )
+    if (targets.length === 0) return
+    setBulkRunning(true)
+    for (const ev of targets) {
+      await doImport(ev)
+      await sleep(500)
+    }
+    setBulkRunning(false)
+  }
+
   const withPoints = events.filter((e) => e.win_points != null)
   const noPoints = events.filter((e) => e.win_points == null)
+  const pendingCount = withPoints.filter(
+    (e) => !e.imported && importState[e.id] == null
+  ).length
 
   return (
     <div className="page">
@@ -74,6 +101,7 @@ export default function WtImport() {
       <p className="desc">
         World Triathlon の Paratriathlon 大会を Algolia から取得し、
         結果 Excel を自動ダウンロードして DB にインポートします。
+        既存レースはスキップします（再インポートは各行の「再取込」ボタンで実行）。
       </p>
 
       <div className="wti-toolbar">
@@ -89,9 +117,18 @@ export default function WtImport() {
             ))}
           </select>
         </div>
-        <button className="submit-btn" onClick={fetchEvents} disabled={loading}>
+        <button className="submit-btn" onClick={fetchEvents} disabled={loading || bulkRunning}>
           {loading ? '取得中...' : 'データを取得'}
         </button>
+        {!loading && pendingCount > 0 && (
+          <button
+            className="submit-btn wti-bulk-btn"
+            onClick={handleBulkImport}
+            disabled={bulkRunning}
+          >
+            {bulkRunning ? '一括取込中...' : `未取込 ${pendingCount}件を一括インポート`}
+          </button>
+        )}
       </div>
 
       {fetchError && <div className="upload-error">{fetchError}</div>}
@@ -119,8 +156,9 @@ export default function WtImport() {
                 {events.map((ev) => {
                   const state = importState[ev.id]
                   const pts = getPoints(ev)
-                  const isDone = state?.startsWith('done') || ev.imported
                   const isLoading = state === 'loading'
+                  const isSkipped = state === 'skipped' || (ev.imported && state == null)
+                  const isDone = state?.startsWith('done')
                   const isError = state?.startsWith('error')
                   const addedCount = state?.startsWith('done:') ? state.slice(5) : null
                   return (
@@ -159,24 +197,38 @@ export default function WtImport() {
                       <td>
                         {isDone ? (
                           <span className="wti-status wti-status-done">
-                            {addedCount ? `✓ ${addedCount}件` : '✓ 済'}
+                            ✓ {addedCount}件追加
                           </span>
+                        ) : isSkipped ? (
+                          <span className="wti-status wti-status-skipped">済（スキップ）</span>
                         ) : isError ? (
                           <span className="wti-status wti-status-error" title={state?.slice(6)}>
                             ✗ エラー
                           </span>
+                        ) : isLoading ? (
+                          <span className="wti-status wti-status-loading">取込中...</span>
                         ) : (
                           <span className="wti-status wti-status-pending">未インポート</span>
                         )}
                       </td>
-                      <td>
-                        {ev.win_points != null && (
+                      <td className="wti-actions">
+                        {ev.win_points != null && !isLoading && !isDone && !isSkipped && (
                           <button
                             className="wti-import-btn"
-                            onClick={() => handleImport(ev)}
-                            disabled={isLoading || isDone}
+                            onClick={() => doImport(ev)}
+                            disabled={bulkRunning}
                           >
-                            {isLoading ? '取得中...' : isDone ? '完了' : 'インポート'}
+                            インポート
+                          </button>
+                        )}
+                        {ev.win_points != null && (isDone || isSkipped) && (
+                          <button
+                            className="wti-import-btn wti-reimport-btn"
+                            onClick={() => doImport(ev, true)}
+                            disabled={isLoading || bulkRunning}
+                            title="既存データを削除して再インポート"
+                          >
+                            再取込
                           </button>
                         )}
                       </td>

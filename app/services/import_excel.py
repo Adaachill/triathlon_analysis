@@ -53,8 +53,10 @@ def import_excel_file(
     race_date_str: str = "",
     points: int | None = None,
     note: str = "",
+    force: bool = False,
 ) -> dict:
-    """Excelファイルを読み込んでDBにインポート（最初のシートのみ）"""
+    """Excelファイルを読み込んでDBにインポート（最初のシートのみ）。
+    既存レースがある場合は force=True のときのみ上書き、それ以外はスキップ。"""
     from datetime import date as date_type
 
     df = pd.read_excel(path, sheet_name=0)
@@ -77,6 +79,16 @@ def import_excel_file(
         select(Race).where(Race.event_id == event_id)
     ).first()
     is_new_race = race is None
+
+    # 既存レースかつ force=False → スキップ
+    if not is_new_race and not force:
+        return {
+            "race_id": race.id,
+            "event_id": event_id,
+            "added_results": 0,
+            "skipped": True,
+        }
+
     if is_new_race:
         race = Race(event_id=event_id)
         if event_id == REFERENCE_EVENT_ID:
@@ -95,12 +107,10 @@ def import_excel_file(
     session.commit()
     session.refresh(race)
 
-    # 再アップロード時のみ既存結果を削除する。
-    # 新規レースはスキップ（SQLiteがAUTOINCREMENTなしでidを再利用するため、
-    # 削除済みidを採番された場合に別レースのResultsを誤削除するリスクを防ぐ）。
+    # 再インポート（force=True）時のみ既存結果を削除する。
+    # アップロードファイルに含まれるプログラムのみ対象にすることで、
+    # 同じevent_idの別カテゴリデータを消さない。
     if not is_new_race:
-        # アップロードファイルに含まれるプログラムのみ対象にすることで、
-        # 同じevent_idの別カテゴリデータを消さない
         programs_in_file = list({str(v) for v in df["Program Name"].dropna().unique()})
         session.exec(
             delete(Result).where(
@@ -149,6 +159,7 @@ def import_excel_file(
         "race_id": race.id,
         "event_id": event_id,
         "added_results": added_count,
+        "skipped": False,
     }
 
 

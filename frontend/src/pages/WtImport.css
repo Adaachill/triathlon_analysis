@@ -80,8 +80,44 @@
   cursor: help;
 }
 
+.wti-status-skipped {
+  color: var(--text-muted);
+}
+
+.wti-status-loading {
+  color: var(--accent);
+}
+
 .wti-status-pending {
   color: var(--text-muted);
+}
+
+.wti-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.wti-bulk-btn {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.wti-bulk-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.wti-reimport-btn {
+  font-size: 0.76rem;
+  padding: 0.2rem 0.5rem;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.wti-reimport-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .wti-import-btn {

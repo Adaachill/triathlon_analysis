@@ -1,4 +1,5 @@
 """World Triathlonから過去のParatriathlonレース結果を自動インポート"""
+import asyncio
 import os
 import tempfile
 import time
@@ -110,12 +111,16 @@ async def import_wt_event(
     race_name: str = Query(..., description="大会名"),
     race_date: str = Query(..., description="開催日 YYYY-MM-DD"),
     note: str = Query("", description="補足メモ"),
+    force: bool = Query(False, description="既存レースを上書きする"),
     session: Session = Depends(get_db),
 ):
     """
     World Triathlon の大会 Excel を自動ダウンロードして DB にインポートする。
+    既存レースがある場合は force=True のときのみ上書き、それ以外はスキップ。
     """
     download_url = f"{_WT_EXPORT_BASE}/{wt_event_id}"
+
+    await asyncio.sleep(0.5)
 
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
         resp = await client.get(download_url)
@@ -138,6 +143,7 @@ async def import_wt_event(
             race_date_str=race_date,
             points=win_points,
             note=note,
+            force=force,
         )
     except ValueError as e:
         raise HTTPException(422, str(e))
@@ -146,4 +152,5 @@ async def import_wt_event(
     finally:
         os.unlink(tmp_path)
 
-    return {"message": "Import successful", **result}
+    msg = "Skipped (already imported)" if result.get("skipped") else "Import successful"
+    return {"message": msg, **result}

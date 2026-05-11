@@ -356,6 +356,7 @@ export interface WtImportResult {
   race_id: number;
   event_id: string;
   added_results: number;
+  skipped: boolean;
 }
 
 export interface EvalModelStat {
@@ -422,12 +423,14 @@ export const api = {
     race_name: string;
     race_date: string;
     note?: string;
+    force?: boolean;
   }) =>
     postQueryApi<WtImportResult>(`/admin/wt/import/${params.id}`, {
       win_points: String(params.win_points),
       race_name: params.race_name,
       race_date: params.race_date,
       note: params.note ?? '',
+      force: String(params.force ?? false),
     }),
 };
 
