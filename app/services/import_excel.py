@@ -85,9 +85,16 @@ def import_excel_file(
     session.commit()
     session.refresh(race)
 
-    # 既存結果を削除
-    session.exec(delete(Result).where(Result.race_id == race.id))
-    session.commit()
+    # アップロードされたファイルに含まれるプログラム名のみを対象に削除
+    # （同じEvent IDでも別カテゴリのデータを消さないようにするため）
+    programs_in_file = list({str(v) for v in df["Program Name"].dropna().unique()})
+    session.exec(
+        delete(Result).where(
+            Result.race_id == race.id,
+            Result.program_name.in_(programs_in_file),
+        )
+    )
+    # 削除と追加を同一トランザクションにまとめる（中間コミットしない）
 
     # 行ごとにResultを追加
     added_count = 0
