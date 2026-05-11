@@ -126,12 +126,12 @@ def _compute_old_als_program(
     }
 
 
-def _mae(errors: list[float]) -> float:
-    return sum(abs(e) for e in errors) / len(errors) if errors else float("nan")
+def _mae(errors: list[float]) -> float | None:
+    return sum(abs(e) for e in errors) / len(errors) if errors else None
 
 
-def _rmse(errors: list[float]) -> float:
-    return math.sqrt(sum(e ** 2 for e in errors) / len(errors)) if errors else float("nan")
+def _rmse(errors: list[float]) -> float | None:
+    return math.sqrt(sum(e ** 2 for e in errors) / len(errors)) if errors else None
 
 
 def evaluate_difficulty_models(session: Session) -> dict[str, Any]:
@@ -266,7 +266,13 @@ def evaluate_difficulty_models(session: Session) -> dict[str, Any]:
 
     # 集計
     def _agg(errs: list[float]) -> dict:
-        return {"mae_sec": round(_mae(errs), 2), "rmse_sec": round(_rmse(errs), 2), "n": len(errs)}
+        mae = _mae(errs)
+        rmse = _rmse(errs)
+        return {
+            "mae_sec": round(mae, 2) if mae is not None else None,
+            "rmse_sec": round(rmse, 2) if rmse is not None else None,
+            "n": len(errs),
+        }
 
     summary = {m: _agg(all_errors[m]["total_sec"]) for m in models}
 
