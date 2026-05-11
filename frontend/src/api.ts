@@ -312,6 +312,10 @@ export async function getUpcomingEvents(daysAhead = 365): Promise<AlgoliaEvent[]
           `start_date_timestamp >= ${nowTs}`,
           `start_date_timestamp <= ${endTs}`,
         ],
+        facetFilters: [
+          ['sport_categories:Triathlon'],
+          ['specification_categories:Paratriathlon'],
+        ],
       }],
     }),
   });
