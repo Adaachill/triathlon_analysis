@@ -28,6 +28,4 @@ ENV/
 Thumbs.db
 
 # Project specific
-raw_excel/*.xlsx
-raw_excel/*.xls
 raw_excel/.~lock.*
