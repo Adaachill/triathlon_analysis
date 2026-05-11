@@ -1,9 +1,25 @@
-"""ALS + IRLS による難易度・強さ指標の最適化"""
+"""統合ALS + IRLS による難易度・強さ指標の最適化
+
+改良点（v2）:
+  1. 時間減衰ウェイト: 経過年数に応じて指数減衰（半減期 1 年）。直近の対戦
+     ペアほど難易度推定に強く寄与する。
+  2. 全プログラム横断難易度: 難易度パラメータを全プログラム共通とすることで
+     サンプル数の少ないカテゴリの推定精度を向上。
+     PTWC のバイク・ランはハンドサイクル・車いすのため貢献ウェイトを低減。
+  3. 強さパラメータは従来通りプログラム別（各カテゴリのランキングに使用）。
+"""
+import math
+from datetime import date as date_type
 from sqlmodel import Session, select
-from app.models import Result
+from app.models import Result, Race
 
 _OPT_FIELDS = ["total_sec", "swim_sec", "t1_sec", "bike_sec", "t2_sec", "run_sec"]
+
+# 統合キャッシュ。キー "__unified__" に全プログラム分の結果を格納。
 _CACHE: dict[str, dict] = {}
+
+# 時間減衰の半減期（日数）
+_HALFLIFE_DAYS = 365
 
 
 def _field_to_strength_key(f: str) -> str:
@@ -12,163 +28,189 @@ def _field_to_strength_key(f: str) -> str:
     return "strength_" + f.replace("_sec", "")
 
 
-def compute_optimized_program(
+def _time_weight(race_date, today: date_type | None = None) -> float:
+    """レース日から経過年数に基づく時間減衰ウェイト。半減期 = 1 年。"""
+    if today is None:
+        today = date_type.today()
+    if race_date is None:
+        return 1.0
+    days_ago = max(0, (today - race_date).days)
+    return math.exp(-math.log(2) * days_ago / _HALFLIFE_DAYS)
+
+
+def _program_seg_weight(program_name: str, field: str) -> float:
+    """プログラム×セグメント別の難易度プーリングウェイト。
+    PTWC はバイク（ハンドサイクル）・ランとトランジション区間が他カテゴリと
+    異なるため 0.3 に低減。スイムは同条件なので 1.0。
+    """
+    if "PTWC" in program_name and field in ("bike_sec", "run_sec", "t1_sec", "t2_sec"):
+        return 0.3
+    return 1.0
+
+
+def compute_optimized_unified(
     session: Session,
-    program_name: str,
     outlier_k: float = 2.5,
     min_weight: float = 0.1,
     max_iter: int = 30,
     exclude_race_ids: set[int] | None = None,
 ) -> dict:
     """
-    ALS + IRLS で難易度・強さ指標を計算する。
+    全プログラム横断・時間減衰付き ALS + IRLS。
 
-    モデル: actual[athlete, race, seg] ≈ strength[athlete, seg] + difficulty[race, seg]
-    識別制約: 各フィールドで mean(difficulty[r]) = 0（平均センタリング）
-    外れ値: total_sec 残差の MAD × 1.4826 × outlier_k を超えるペアを downweight
-    exclude_race_ids: 指定したrace_idを計算から除外する（差分比較用）
+    モデル:
+        actual[a, r, p, s] ≈ strength[a, p, s] + difficulty[r, s]
+        strength: プログラム別（ランキングに使用）
+        difficulty: 全プログラム共通（コース難易度）
+
+    識別制約: mean(difficulty[r, s]) = 0
 
     Returns:
         {
-            "race_difficulties":   {race_id: {"total_sec": float, "swim_sec": float, ...}},
-            "athlete_strengths":   {athlete_id: {"strength": float, "strength_swim": float, ...}},
-            "outlier_weights":     {race_id: {athlete_id: float}},
-            "athlete_race_counts": {athlete_id: int},
+            "race_difficulties": {race_id: {field: float, ...}},
+            "program_results": {
+                program_name: {
+                    "race_difficulties": ...,   # 共通難易度（同一内容）
+                    "athlete_strengths": ...,
+                    "outlier_weights": ...,
+                    "athlete_race_counts": ...,
+                }
+            }
         }
     """
-    results = session.exec(
+    all_results = session.exec(
         select(Result).where(
-            Result.program_name == program_name,
             Result.status == "Finished",
             Result.total_sec.isnot(None),
         )
     ).all()
 
     if exclude_race_ids:
-        results = [r for r in results if r.race_id not in exclude_race_ids]
+        all_results = [r for r in all_results if r.race_id not in exclude_race_ids]
 
-    if not results:
-        return {
-            "race_difficulties": {},
-            "athlete_strengths": {},
-            "outlier_weights": {},
-            "athlete_race_counts": {},
-        }
+    if not all_results:
+        return {"race_difficulties": {}, "program_results": {}}
 
-    # data[athlete_id][race_id][field] = value
-    data: dict[str, dict[int, dict[str, float]]] = {}
-    for r in results:
-        a = r.athlete_id
-        rr = r.race_id
-        if a not in data:
-            data[a] = {}
-        if rr not in data[a]:
-            data[a][rr] = {}
+    # レース日取得（時間減衰用）
+    race_ids_set = {r.race_id for r in all_results}
+    race_objs = session.exec(select(Race).where(Race.id.in_(list(race_ids_set)))).all()
+    race_dates = {r.id: r.date for r in race_objs}
+    today = date_type.today()
+    time_wt: dict[int, float] = {
+        rid: _time_weight(race_dates.get(rid), today) for rid in race_ids_set
+    }
+
+    # prog_data[program][athlete_id][race_id][field] = value
+    prog_data: dict[str, dict[str, dict[int, dict[str, float]]]] = {}
+    for r in all_results:
+        p, a, rr = r.program_name, r.athlete_id, r.race_id
+        prog_data.setdefault(p, {}).setdefault(a, {}).setdefault(rr, {})
         for f in _OPT_FIELDS:
             v = getattr(r, f)
             if v is not None:
-                data[a][rr][f] = float(v)
+                prog_data[p][a][rr][f] = float(v)
 
-    athlete_ids = list(data.keys())
-    race_ids = list(dict.fromkeys(r.race_id for r in results))
+    programs = list(prog_data.keys())
+    all_race_ids = list(race_ids_set)
 
-    # 初期値: diff = 0, strength = 選手ごとの単純平均
-    diff: dict[int, dict[str, float]] = {r: {f: 0.0 for f in _OPT_FIELDS} for r in race_ids}
-    strength: dict[str, dict[str, float]] = {}
-    for a in athlete_ids:
-        strength[a] = {}
-        for f in _OPT_FIELDS:
-            vals = [data[a][r][f] for r in data[a] if f in data[a][r]]
-            strength[a][f] = sum(vals) / len(vals) if vals else 0.0
+    # 初期値 ─ difficulty = 0, strength = 選手ごとの単純平均
+    diff: dict[int, dict[str, float]] = {r: {f: 0.0 for f in _OPT_FIELDS} for r in all_race_ids}
+    strength: dict[str, dict[str, dict[str, float]]] = {}
+    for p in programs:
+        strength[p] = {}
+        for a in prog_data[p]:
+            strength[p][a] = {}
+            for f in _OPT_FIELDS:
+                vals = [prog_data[p][a][r][f] for r in prog_data[p][a] if f in prog_data[p][a][r]]
+                strength[p][a][f] = sum(vals) / len(vals) if vals else 0.0
 
-    # weights[athlete_id][race_id] = 1.0
-    weights: dict[str, dict[int, float]] = {
-        a: {r: 1.0 for r in data[a]} for a in athlete_ids
+    # 外れ値ウェイト[program][athlete][race] = 1.0
+    ow: dict[str, dict[str, dict[int, float]]] = {
+        p: {a: {r: 1.0 for r in prog_data[p][a]} for a in prog_data[p]}
+        for p in programs
     }
 
     for _ in range(max_iter):
-        # a. strength 更新: strength[a,f] = weighted_mean(actual[a,r,f] - diff[r,f])
-        for a in athlete_ids:
-            for f in _OPT_FIELDS:
-                num = 0.0
-                den = 0.0
-                for r in data[a]:
-                    if f in data[a][r]:
-                        w = weights[a].get(r, 1.0)
-                        num += w * (data[a][r][f] - diff[r][f])
-                        den += w
-                strength[a][f] = num / den if den > 0 else 0.0
+        # a. strength 更新（プログラム別）
+        for p in programs:
+            for a in prog_data[p]:
+                for f in _OPT_FIELDS:
+                    num = den = 0.0
+                    for r in prog_data[p][a]:
+                        if f in prog_data[p][a][r]:
+                            w = ow[p][a].get(r, 1.0) * time_wt.get(r, 1.0)
+                            num += w * (prog_data[p][a][r][f] - diff[r][f])
+                            den += w
+                    strength[p][a][f] = num / den if den > 0 else 0.0
 
-        # b. difficulty 更新: diff[r,f] = weighted_mean(actual[a,r,f] - strength[a,f])
-        for r in race_ids:
+        # b. difficulty 更新（全プログラム横断、セグメント×プログラムウェイト付き）
+        for r in all_race_ids:
             for f in _OPT_FIELDS:
-                num = 0.0
-                den = 0.0
-                for a in athlete_ids:
-                    if r in data.get(a, {}) and f in data[a][r]:
-                        w = weights[a].get(r, 1.0)
-                        num += w * (data[a][r][f] - strength[a][f])
-                        den += w
+                num = den = 0.0
+                for p in programs:
+                    pw = _program_seg_weight(p, f)
+                    if pw == 0.0:
+                        continue
+                    for a in prog_data[p]:
+                        if r in prog_data[p][a] and f in prog_data[p][a][r]:
+                            w = ow[p][a].get(r, 1.0) * time_wt.get(r, 1.0) * pw
+                            num += w * (prog_data[p][a][r][f] - strength[p][a][f])
+                            den += w
                 diff[r][f] = num / den if den > 0 else 0.0
 
-        # c. 平均センタリング: mean(diff[r,f]) → 0; strength += mean_diff
-        if race_ids:
+        # c. 平均センタリング: mean(diff[r, f]) → 0
+        if all_race_ids:
             for f in _OPT_FIELDS:
-                mean_d = sum(diff[r][f] for r in race_ids) / len(race_ids)
-                for r in race_ids:
+                mean_d = sum(diff[r][f] for r in all_race_ids) / len(all_race_ids)
+                for r in all_race_ids:
                     diff[r][f] -= mean_d
-                for a in athlete_ids:
-                    strength[a][f] += mean_d
+                for p in programs:
+                    for a in prog_data[p]:
+                        strength[p][a][f] += mean_d
 
-        # d. 外れ値検出: total_sec 残差 → MAD → 閾値超えペアを downweight
-        abs_residuals: list[float] = []
-        pairs: list[tuple[str, int]] = []
-        for a in athlete_ids:
-            for r in data[a]:
-                if "total_sec" in data[a][r]:
-                    res = data[a][r]["total_sec"] - (
-                        strength[a]["total_sec"] + diff[r]["total_sec"]
-                    )
-                    abs_residuals.append(abs(res))
-                    pairs.append((a, r))
-
-        if abs_residuals:
-            sorted_abs = sorted(abs_residuals)
-            n = len(sorted_abs)
-            mad = (
-                sorted_abs[n // 2]
-                if n % 2 == 1
-                else (sorted_abs[n // 2 - 1] + sorted_abs[n // 2]) / 2
-            )
-            threshold = outlier_k * mad * 1.4826
-            for (a, r), abs_r in zip(pairs, abs_residuals):
-                if threshold > 0 and abs_r > threshold:
-                    weights[a][r] = max(min_weight, threshold / abs_r)
-                else:
-                    weights[a][r] = 1.0
+        # d. IRLS 外れ値検出（プログラム別、total_sec 残差）
+        for p in programs:
+            abs_res: list[float] = []
+            pairs: list[tuple[str, int]] = []
+            for a in prog_data[p]:
+                for r in prog_data[p][a]:
+                    if "total_sec" in prog_data[p][a][r]:
+                        res = prog_data[p][a][r]["total_sec"] - (
+                            strength[p][a]["total_sec"] + diff[r]["total_sec"]
+                        )
+                        abs_res.append(abs(res))
+                        pairs.append((a, r))
+            if abs_res:
+                n = len(abs_res)
+                s = sorted(abs_res)
+                mad = s[n // 2] if n % 2 == 1 else (s[n // 2 - 1] + s[n // 2]) / 2
+                thr = outlier_k * mad * 1.4826
+                for (a, r), ar in zip(pairs, abs_res):
+                    ow[p][a][r] = max(min_weight, thr / ar) if thr > 0 and ar > thr else 1.0
 
     # 結果整形
-    race_difficulties: dict[int, dict[str, float]] = {
-        r: {f: diff[r][f] for f in _OPT_FIELDS} for r in race_ids
-    }
-    athlete_strengths: dict[str, dict[str, float]] = {
-        a: {_field_to_strength_key(f): strength[a][f] for f in _OPT_FIELDS}
-        for a in athlete_ids
-    }
-    outlier_weights: dict[int, dict[str, float]] = {}
-    for a in athlete_ids:
-        for r, w in weights[a].items():
-            if r not in outlier_weights:
-                outlier_weights[r] = {}
-            outlier_weights[r][a] = w
+    race_difficulties = {r: {f: diff[r][f] for f in _OPT_FIELDS} for r in all_race_ids}
 
-    athlete_race_counts: dict[str, int] = {a: len(data[a]) for a in athlete_ids}
+    program_results: dict[str, dict] = {}
+    for p in programs:
+        outlier_weights: dict[int, dict[str, float]] = {}
+        for a in prog_data[p]:
+            for r, w in ow[p][a].items():
+                outlier_weights.setdefault(r, {})[a] = w
+
+        program_results[p] = {
+            "race_difficulties": race_difficulties,   # 全プログラム共通
+            "athlete_strengths": {
+                a: {_field_to_strength_key(f): strength[p][a][f] for f in _OPT_FIELDS}
+                for a in prog_data[p]
+            },
+            "outlier_weights": outlier_weights,
+            "athlete_race_counts": {a: len(prog_data[p][a]) for a in prog_data[p]},
+        }
 
     return {
         "race_difficulties": race_difficulties,
-        "athlete_strengths": athlete_strengths,
-        "outlier_weights": outlier_weights,
-        "athlete_race_counts": athlete_race_counts,
+        "program_results": program_results,
     }
 
 
@@ -178,17 +220,22 @@ def get_optimized_program(
     force_recompute: bool = False,
     **kwargs,
 ) -> dict:
-    """モジュールレベルキャッシュ付きで最適化結果を取得する。"""
-    if not force_recompute and program_name in _CACHE:
-        return _CACHE[program_name]
-    result = compute_optimized_program(session, program_name, **kwargs)
-    _CACHE[program_name] = result
-    return result
+    """統合キャッシュから指定プログラムの結果を返す。"""
+    if not force_recompute and "__unified__" in _CACHE:
+        unified = _CACHE["__unified__"]
+    else:
+        unified = compute_optimized_unified(session, **kwargs)
+        _CACHE["__unified__"] = unified
+
+    empty: dict = {
+        "race_difficulties": {},
+        "athlete_strengths": {},
+        "outlier_weights": {},
+        "athlete_race_counts": {},
+    }
+    return unified["program_results"].get(program_name, empty)
 
 
 def invalidate_cache(program_name: str | None = None) -> None:
-    """_CACHE をクリアする。"""
-    if program_name is None:
-        _CACHE.clear()
-    else:
-        _CACHE.pop(program_name, None)
+    """キャッシュをクリアする。program_name は無視して常に全クリア。"""
+    _CACHE.clear()

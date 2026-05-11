@@ -52,3 +52,12 @@ async def import_raw_excel(session: Session = Depends(get_db)):
         "message": "Import completed",
         "results": results,
     }
+
+
+@router.get("/evaluate_difficulty")
+async def evaluate_difficulty(session: Session = Depends(get_db)):
+    """難易度推定モデルの精度評価（レースアウト CV）。
+    旧 ALS・新統合 ALS・同一カテゴリ・クロスカテゴリの MAE / RMSE を比較する。
+    """
+    from app.services.eval_difficulty import evaluate_difficulty_models
+    return evaluate_difficulty_models(session)
