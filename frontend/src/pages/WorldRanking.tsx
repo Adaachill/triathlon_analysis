@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { api, getUpcomingEvents } from '../api'
 import type { WorldRankingEntry, WorldRankingRace, WorldRankingPredictedRace, AlgoliaEvent, PredictionMode } from '../api'
@@ -61,10 +61,8 @@ function computeRaceFlags(
       if (nowCounted && !wasCounted) flags.set(r.race_id, 'newly_counted')
       else if (!nowCounted && wasCounted) flags.set(r.race_id, 'newly_uncounted')
     } else if (baseP2.has(r.race_id)) {
-      // Previous → Current に昇格（基準日が未来になって期間が変わった）
       flags.set(r.race_id, 'newly_entered')
     } else {
-      // ベースラインに存在しない新規
       flags.set(r.race_id, 'newly_entered')
     }
   }
@@ -73,7 +71,6 @@ function computeRaceFlags(
     if (flags.has(r.race_id)) continue
     const nowCounted = idx < 3
     if (baseP1.has(r.race_id)) {
-      // Current → Previous に移動
       flags.set(r.race_id, 'moved_to_previous')
     } else if (baseP2.has(r.race_id)) {
       const wasCounted = baseP2.get(r.race_id)!
@@ -121,6 +118,13 @@ export default function WorldRanking() {
   const [error, setError] = useState<string | null>(null)
   const [expandedAthletes, setExpandedAthletes] = useState<Set<string>>(new Set())
 
+  // スタートリストアップロード用
+  const [uploadingEventId, setUploadingEventId] = useState<number | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadSuccess, setUploadSuccess] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const uploadTargetEventId = useRef<string | null>(null)
+
   useEffect(() => {
     api.getPrograms().then((r) => {
       setPrograms(r.programs)
@@ -149,25 +153,15 @@ export default function WorldRanking() {
     return directDate
   }, [dateMode, selectedEvent, directDate])
 
-  const startlistEventIds = useMemo(
-    () => upcomingEvents.filter((ev) => ev.startlist_available).map((ev) => String(ev.id)),
-    [upcomingEvents],
-  )
-
   useEffect(() => {
     if (!program || !asOfDate) return
     setLoading(true)
     setError(null)
-    api.getWorldRanking(
-      program,
-      asOfDate,
-      predictionMode,
-      predictionMode === 'startlist_only' ? startlistEventIds : [],
-    )
+    api.getWorldRanking(program, asOfDate, predictionMode)
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [program, asOfDate, predictionMode, startlistEventIds])
+  }, [program, asOfDate, predictionMode])
 
   const toggleExpand = (athleteId: string) => {
     setExpandedAthletes((prev) => {
@@ -176,6 +170,34 @@ export default function WorldRanking() {
       else next.add(athleteId)
       return next
     })
+  }
+
+  const handleUploadClick = (ev: AlgoliaEvent) => {
+    uploadTargetEventId.current = String(ev.id)
+    setUploadingEventId(ev.id)
+    setUploadError(null)
+    setUploadSuccess(null)
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !uploadTargetEventId.current) {
+      setUploadingEventId(null)
+      return
+    }
+    const targetId = uploadTargetEventId.current
+    try {
+      await api.uploadStartlist(file, targetId)
+      setUploadSuccess(Number(targetId))
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'アップロードに失敗しました')
+      setUploadingEventId(null)
+    } finally {
+      setUploadingEventId(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      uploadTargetEventId.current = null
+    }
   }
 
   const today = todayStr()
@@ -292,8 +314,17 @@ export default function WorldRanking() {
         {dateMode === 'from_race' && selectedEvent && eventsInRange.length > 0 && (
           <div className="wr-events-in-range-section">
             <div className="wr-events-in-range-label">
-              期間内の大会: {asOfDate}まで ({eventsInRange.length}件)
+              期間内の大会: {asOfDate}まで（{eventsInRange.length}件）
             </div>
+            {uploadError && <p className="wr-upload-error">{uploadError}</p>}
+            {/* 非表示のファイル選択input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx"
+              style={{ display: 'none' }}
+              onChange={handleFileChange}
+            />
             <div className="wr-events-in-range-list">
               {eventsInRange.map((ev) => (
                 <div key={ev.id} className={`wr-event-row ${ev.startlist_available ? 'wr-event-startlist' : 'wr-event-no-startlist'}`}>
@@ -302,6 +333,20 @@ export default function WorldRanking() {
                   </span>
                   <span className="wr-event-row-name">{ev.name}</span>
                   <span className="wr-event-row-date">{ev.start_date}</span>
+                  {ev.startlist_available && (
+                    uploadSuccess === ev.id ? (
+                      <span className="wr-upload-success-badge">✓ 登録済</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="wr-sl-upload-btn"
+                        onClick={() => handleUploadClick(ev)}
+                        disabled={uploadingEventId !== null}
+                      >
+                        {uploadingEventId === ev.id ? '処理中...' : '📂 SLアップロード'}
+                      </button>
+                    )
+                  )}
                 </div>
               ))}
             </div>
@@ -326,27 +371,20 @@ export default function WorldRanking() {
               <span>前年同一大会の参加者で予測</span>
             </label>
             <label className="wr-prediction-option">
-              <input type="radio" name="predictionMode" value="startlist_only" checked={predictionMode === 'startlist_only'} onChange={() => setPredictionMode('startlist_only')} />
-              <span>
-                スタートリストあり大会のみ予測
-                {startlistEventIds.length > 0 && <span className="wr-startlist-count">（{startlistEventIds.length}大会）</span>}
-              </span>
-            </label>
-            <label className="wr-prediction-option">
               <input type="radio" name="predictionMode" value="startlist" checked={predictionMode === 'startlist'} onChange={() => setPredictionMode('startlist')} />
               <span>スタートリスト（アップロード済み）で予測</span>
             </label>
           </div>
-          {predictionMode === 'startlist' && (
-            <p className="wr-predictions-note">
-              ※ Startlist テーブルにアップロード済みの参加者リストを使用し、<strong>強さランク順</strong>で予測順位を決定します。
-            </p>
-          )}
-          {predictionMode === 'startlist_only' || predictionMode === 'previous_year' ? (
+          {predictionMode === 'previous_year' && (
             <p className="wr-predictions-note">
               ※ 前年の同一大会（年号以外のレース名が一致）の参加者リストを使用し、<strong>強さランク順</strong>で予測順位を決定します。前年大会がない場合はスキップ。
             </p>
-          ) : null}
+          )}
+          {predictionMode === 'startlist' && (
+            <p className="wr-predictions-note">
+              ※ 上記の大会リストからSLをアップロードした大会に登録済みの参加者を使用し、<strong>強さランク順</strong>で予測順位を決定します。
+            </p>
+          )}
         </div>
 
         {/* 予測対象大会の一覧 */}
@@ -360,15 +398,20 @@ export default function WorldRanking() {
                 {data.predicted_races.map((pr: WorldRankingPredictedRace) => (
                   <div key={pr.race_id} className={`wr-predicted-race-row ${pr.is_startlist ? 'wr-predicted-race-sl' : ''}`}>
                     <span className={`wr-predicted-race-badge ${pr.is_startlist ? 'wr-badge-sl' : 'wr-badge-prev'}`}>
-                      {pr.is_startlist ? 'スタートリスト' : '前年参加者'}
+                      {pr.is_startlist ? 'SL登録' : '前年参加者'}
                     </span>
                     <span className="wr-predicted-race-name">{pr.race_name ?? `Race ${pr.race_id}`}</span>
                     <span className="wr-predicted-race-date">{pr.date}</span>
                     <span className="wr-predicted-race-pts">{pr.points}pt</span>
-                    <span className="wr-predicted-race-based">
-                      前年: {pr.based_on_race_name ?? `Race ${pr.based_on_race_id}`}
+                    {!pr.is_startlist && (
+                      <span className="wr-predicted-race-based">
+                        前年: {pr.based_on_race_name ?? `Race ${pr.based_on_race_id}`}
+                        <span className="wr-predicted-race-n">（{pr.participants_count}名）</span>
+                      </span>
+                    )}
+                    {pr.is_startlist && (
                       <span className="wr-predicted-race-n">（{pr.participants_count}名）</span>
-                    </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -377,7 +420,9 @@ export default function WorldRanking() {
         )}
         {data && predictionMode !== 'none' && data.predicted_races.length === 0 && (
           <div className="wr-predicted-races-empty">
-            ⚠️ 予測対象大会が見つかりませんでした（前年同一大会がDBに存在しない可能性があります）
+            {predictionMode === 'startlist'
+              ? '⚠️ スタートリストが登録された大会がありません。上記リストから「SLアップロード」してください。'
+              : '⚠️ 予測対象大会が見つかりませんでした（前年同一大会がDBに存在しない可能性があります）'}
           </div>
         )}
 
@@ -387,7 +432,7 @@ export default function WorldRanking() {
             <span className="wr-legend-title">大会ハイライト凡例:</span>
             {([
               ['predicted', '前年参加者予測'],
-              ['predicted_startlist', 'スタートリスト予測'],
+              ['predicted_startlist', 'SL予測'],
               ['moved_to_previous', 'Current→Previous移動'],
               ['newly_entered', '新規追加'],
               ['newly_counted', '上位3に新規入り'],

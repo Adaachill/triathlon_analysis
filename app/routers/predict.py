@@ -2,7 +2,7 @@
 from io import BytesIO
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlmodel import Session, select
 
 from app.deps import get_db
@@ -10,8 +10,6 @@ from app.models import Race, Startlist
 from app.services.als_optimizer import get_optimized_program
 
 router = APIRouter(prefix="/predict", tags=["predict"])
-
-DEVONPORT_2025_EVENT_ID = "194210"
 
 COMPETITION_PROGRAMS = {
     "PTWC Men", "PTWC Women",
@@ -104,19 +102,12 @@ def _assign_ranks(athletes: list[dict], pred_key: str, rank_key: str) -> None:
 def _compute_predictions(startlist: list[dict], session: Session) -> dict:
     """
     スタートリストと DB から予想タイム・順位を計算して返す（共通処理）。
-    GET / POST どちらのエンドポイントもこの関数を呼び出す。
     """
-    devonport_race = session.exec(
-        select(Race).where(Race.event_id == DEVONPORT_2025_EVENT_ID)
-    ).first()
-    devonport_race_id = devonport_race.id if devonport_race else None
-
     by_program: dict[str, list[dict]] = {}
     for a in startlist:
         by_program.setdefault(a["program_name"], []).append(a)
 
     categories: dict[str, list[dict]] = {}
-    devonport_difficulties: dict[str, dict] = {}
 
     for prog in PROGRAM_ORDER:
         if prog not in by_program:
@@ -124,10 +115,6 @@ def _compute_predictions(startlist: list[dict], session: Session) -> dict:
 
         opt = get_optimized_program(session, prog)
         als_strengths = opt["athlete_strengths"]
-        als_race_diffs = opt["race_difficulties"]
-
-        devonport_diff = als_race_diffs.get(devonport_race_id, {}) if devonport_race_id else {}
-        devonport_difficulties[prog] = devonport_diff
 
         result_athletes = []
         for a in by_program[prog]:
@@ -141,28 +128,22 @@ def _compute_predictions(startlist: list[dict], session: Session) -> dict:
                 "strength_bike": s_data.get("strength_bike")  if s_data else None,
                 "strength_t2":   s_data.get("strength_t2")    if s_data else None,
                 "strength_run":  s_data.get("strength_run")   if s_data else None,
-                "pred_avg":       _build_prediction(s_data, {}),
-                "pred_devonport": _build_prediction(s_data, devonport_diff),
+                "pred_avg": _build_prediction(s_data, {}),
             }
             result_athletes.append(entry)
 
-        _assign_ranks(result_athletes, "pred_avg",       "rank_avg")
-        _assign_ranks(result_athletes, "pred_devonport", "rank_devonport")
+        _assign_ranks(result_athletes, "pred_avg", "rank_avg")
         categories[prog] = result_athletes
 
-    return {
-        "categories": categories,
-        "devonport_race_id": devonport_race_id,
-        "devonport_difficulties": devonport_difficulties,
-    }
+    return {"categories": categories}
 
 
 # ── エンドポイント ─────────────────────────────────────────────────────────────
 @router.post("/upload-startlist")
 async def upload_startlist(
     file: UploadFile = File(...),
-    race_id: int | None = None,
-    event_id: str | None = None,
+    race_id: int | None = Query(default=None),
+    event_id: str | None = Query(default=None),
     session: Session = Depends(get_db),
 ):
     """
@@ -196,18 +177,11 @@ async def upload_startlist(
             race = session.exec(select(Race).where(Race.event_id == event_id)).first()
 
         if race:
-            # 既存データ削除（同じレース・イベントの古いスタートリストを上書き）
-            session.exec(
-                select(Startlist).where(
-                    (Startlist.race_id == race.id) | (Startlist.event_id == race.event_id)
-                )
-            )
             for old in session.exec(
                 select(Startlist).where(Startlist.event_id == race.event_id)
             ).all():
                 session.delete(old)
 
-            # 新規データ挿入
             for athlete_data in startlist:
                 sl = Startlist(
                     race_id=race.id,

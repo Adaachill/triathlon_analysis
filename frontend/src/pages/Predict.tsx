@@ -4,8 +4,6 @@ import { api, formatTime, formatDiff } from '../api'
 import type { PredictAthlete, PredictSegTimes, PredictResponse } from '../api'
 import './pages.css'
 
-type DiffMode = 'avg' | 'devonport'
-
 const PROGRAM_ORDER = [
   'PTWC Men', 'PTWC Women',
   'PTS2 Men', 'PTS2 Women',
@@ -23,16 +21,8 @@ const SEGS = [
   { label: 'Run',  key: 'run_sec'  },
 ] as const
 
-function getPred(a: PredictAthlete, mode: DiffMode): PredictSegTimes {
-  return mode === 'avg' ? a.pred_avg : a.pred_devonport
-}
-function getRank(a: PredictAthlete, mode: DiffMode): number | null {
-  return mode === 'avg' ? a.rank_avg : a.rank_devonport
-}
-
 export default function Predict() {
   const [data, setData]             = useState<PredictResponse | null>(null)
-  const [diffMode, setDiffMode]     = useState<DiffMode>('devonport')
   const [activeCategory, setActiveCategory] = useState<string>('')
   const [expanded, setExpanded]     = useState<Set<string>>(new Set())
   const [uploading, setUploading]   = useState(false)
@@ -75,8 +65,7 @@ export default function Predict() {
             <h2>🔮 予想リザルト</h2>
           </div>
           <p className="desc">
-            スタートリスト（.xlsx）をアップロードすると、ALS強度とコース難易度から
-            各選手の予想タイム・予想順位を算出します。
+            スタートリスト（.xlsx）をアップロードすると、ALS強度から各選手の予想タイム・予想順位を算出します。
           </p>
           <div className="upload-note">
             <strong>⚠️ ファイルの取得方法：</strong>
@@ -110,11 +99,10 @@ export default function Predict() {
   const athletes = activeCategory ? (data.categories[activeCategory] ?? []) : []
   const sorted = [
     ...athletes
-      .filter((a) => getRank(a, diffMode) != null)
-      .sort((a, b) => (getRank(a, diffMode) ?? 999) - (getRank(b, diffMode) ?? 999)),
-    ...athletes.filter((a) => getRank(a, diffMode) == null),
+      .filter((a) => a.rank_avg != null)
+      .sort((a, b) => (a.rank_avg ?? 999) - (b.rank_avg ?? 999)),
+    ...athletes.filter((a) => a.rank_avg == null),
   ]
-  const devDiff = data.devonport_difficulties[activeCategory] ?? {}
 
   return (
     <div className="predict-page">
@@ -158,47 +146,6 @@ export default function Predict() {
           ))}
         </div>
 
-        {/* 難易度モードタブ */}
-        <div className="predict-diff-tabs">
-          <button
-            className={`predict-diff-tab${diffMode === 'devonport' ? ' active' : ''}`}
-            onClick={() => setDiffMode('devonport')}
-          >
-            Devonport 2025 コース
-          </button>
-          <button
-            className={`predict-diff-tab${diffMode === 'avg' ? ' active' : ''}`}
-            onClick={() => setDiffMode('avg')}
-          >
-            平均コース（ALS全体）
-          </button>
-        </div>
-
-        {/* コース難易度サマリー（Devonportモード時） */}
-        {diffMode === 'devonport' && (
-          <div className="predict-diff-summary">
-            {devDiff.total_sec != null ? (
-              <>
-                <span className="diff-summary-label">Devonport 2025 難易度:</span>
-                <span className={`difficulty-chip ${(devDiff.total_sec ?? 0) >= 0 ? 'harder' : 'easier'}`}>
-                  合計 {(devDiff.total_sec ?? 0) >= 0 ? '+' : ''}{Math.round(devDiff.total_sec ?? 0)}秒
-                </span>
-                {(['swim_sec', 't1_sec', 'bike_sec', 't2_sec', 'run_sec'] as const).map((f) => {
-                  const v = devDiff[f]
-                  const label = { swim_sec: 'Swim', t1_sec: 'T1', bike_sec: 'Bike', t2_sec: 'T2', run_sec: 'Run' }[f]
-                  return v != null ? (
-                    <span key={f} className={`difficulty-chip ${v >= 0 ? 'harder' : 'easier'}`}>
-                      {label}: {v >= 0 ? '+' : ''}{Math.round(v)}秒
-                    </span>
-                  ) : null
-                })}
-              </>
-            ) : (
-              <span className="difficulty-na">このカテゴリのDevonport 2025難易度データなし（平均コースと同値）</span>
-            )}
-          </div>
-        )}
-
         {/* 結果テーブル */}
         <div className="table-wrap">
           <table className="data-table">
@@ -218,8 +165,8 @@ export default function Predict() {
             </thead>
             <tbody>
               {sorted.map((a) => {
-                const pred   = getPred(a, diffMode)
-                const rank   = getRank(a, diffMode)
+                const pred   = a.pred_avg
+                const rank   = a.rank_avg
                 const isExp  = expanded.has(a.athlete_id)
                 const canExp = a.has_history
 
