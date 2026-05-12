@@ -340,10 +340,9 @@ export async function getUpcomingEvents(daysAhead = 365): Promise<AlgoliaEvent[]
           `start_date_timestamp >= ${nowTs}`,
           `start_date_timestamp <= ${endTs}`,
         ],
-        // World Championships の子要素（Para Championships）は sport_categories が
-        // "Paratriathlon" になる場合があるため OR で両方をカバー
+        // Paratriathlon 専用大会か、Triathlon親大会で子要素に Para がある場合をカバー
         facetFilters: [
-          ['specification_categories:Paratriathlon', 'sport_categories:Paratriathlon'],
+          ['specification_categories:Paratriathlon', 'specification_categories:Triathlon'],
         ],
       }],
     }),
@@ -355,7 +354,9 @@ export async function getUpcomingEvents(daysAhead = 365): Promise<AlgoliaEvent[]
     .filter((h) => {
       const s = (h.status ?? '').toUpperCase();
       if (s === 'CANCELLED' || s === 'POSTPONED') return false;
-      return h.sport_categories.includes('Paratriathlon');
+      // specification が Paratriathlon OR （specification が Triathlon かつ sport_categories に Paratriathlon を含む）
+      return h.specification_categories.includes('Paratriathlon') ||
+        (h.specification_categories.includes('Triathlon') && h.sport_categories.includes('Paratriathlon'));
     })
     .sort((a, b) => a.start_date.localeCompare(b.start_date));
 }
