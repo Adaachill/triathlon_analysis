@@ -11,7 +11,7 @@ router = APIRouter(prefix="/rankings", tags=["rankings"])
 @router.get("/top")
 async def get_top_athletes(
     program_name: str = Query(..., description="Program Name（必須）"),
-    limit: int = Query(50, ge=1, le=200, description="取得件数"),
+    limit: int = Query(50, ge=1, le=500, description="取得件数"),
     session: Session = Depends(get_db),
 ):
     """

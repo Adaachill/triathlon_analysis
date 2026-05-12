@@ -229,7 +229,9 @@ export default function WorldRanking() {
   const eventsBySport = useMemo(() => {
     const groups: Record<string, AlgoliaEvent[]> = {}
     for (const ev of upcomingEvents) {
-      const key = ev.sport_categories.join(', ') || 'Other'
+      // sport_categoriesにParatriatlonが含まれる場合は"Paratriathlon"に統一
+      // 含まれない場合も"Paratriathlon"（getUpcomingEventsで既にフィルタ済み）
+      const key = ev.sport_categories.includes('Paratriathlon') ? 'Paratriathlon' : (ev.sport_categories[0] || 'Other')
       ;(groups[key] ??= []).push(ev)
     }
     return groups
