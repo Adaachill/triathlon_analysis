@@ -19,6 +19,22 @@
 - マージ済みブランチへの `git push` は絶対に行わない
 - 同一チャット内でのフィックスも、必ず別ブランチ・別PRとする
 
+### 修正・フィックス前のブランチ状態確認
+
+バグ修正や追加変更を行う前に、**必ず対象ブランチのPR状態を確認する**こと。
+
+```bash
+# GitHub MCP ツールで確認する
+mcp__github__pull_request_read(method="get", pullNumber=<PR番号>)
+# または
+git log --oneline origin/main..origin/<branch-name>
+```
+
+- マージ済み（`merged: true`）の場合 → **新しいブランチ・新しいPRを作成する**
+- 未マージ（オープン中）の場合 → 同ブランチへの追加コミットが可能
+
+**禁止:** PRの状態を確認せずにブランチへ `git push` すること
+
 ## PR作成ルール
 
 ### 1. PRラベルの必須化
