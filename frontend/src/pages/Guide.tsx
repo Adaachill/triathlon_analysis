@@ -76,6 +76,20 @@ function EvalSection() {
         過去レースのレースアウト交差検証（LOOCV）による予測タイムの平均誤差（MAE）を確認できます。
         計算に数十秒かかる場合があります。
       </p>
+      <div className="guide-eval-note">
+        <strong>【モデルの前提条件の違いに注意】</strong>
+        <ul>
+          <li>
+            <strong>旧ALS・新統合ALS</strong>：選手の強さをテストレース除外で推定、コース難易度は過去の同会場レースから事前推定。
+            <strong>レース前に予測可能な情報のみを使用</strong>しており、実際の予想タイム計算と同じ条件。
+          </li>
+          <li>
+            <strong>同一カテゴリ・クロスカテゴリ</strong>：コース難易度を<strong>当日の実走タイムから計算</strong>するため、
+            レース開始前には使用できない情報が含まれる（データリーク）。
+            「速報が出始めた後に難易度補正する」用途向けであり、事前予測との直接比較は公平でない。
+          </li>
+        </ul>
+      </div>
       <button
         className="guide-eval-btn"
         onClick={run}
