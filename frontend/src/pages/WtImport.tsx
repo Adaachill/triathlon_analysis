@@ -33,6 +33,7 @@ export default function WtImport() {
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [bulkRunning, setBulkRunning] = useState(false)
+  const [hasFetched, setHasFetched] = useState(false)
   const [importedIds, setImportedIds] = useState<Set<string>>(new Set())
 
   // インポート中イベントの状態 id -> 'loading' | 'done:{n}' | 'skipped' | 'error:{msg}'
@@ -71,10 +72,14 @@ export default function WtImport() {
       setFetchError(e instanceof Error ? e.message : '取得失敗')
     } finally {
       setLoading(false)
+      setHasFetched(true)
     }
   }
 
-  useEffect(() => { fetchEvents() }, [])
+  // ページ表示時はDBのインポート済みIDだけ取得（Algolia呼び出しなし）
+  useEffect(() => {
+    api.getImportedEventIds().then((r) => setImportedIds(new Set(r.event_ids)))
+  }, [])
 
   async function doImport(ev: AlgoliaEvent, force = false) {
     const pts = getPoints(ev)
@@ -271,7 +276,10 @@ export default function WtImport() {
         </>
       )}
 
-      {!loading && events.length === 0 && !fetchError && (
+      {!loading && !hasFetched && (
+        <p className="wti-empty">「データを取得」ボタンを押すと、World Triathlon の過去大会一覧を取得します。</p>
+      )}
+      {!loading && hasFetched && events.length === 0 && !fetchError && (
         <p className="wti-empty">大会が見つかりませんでした。</p>
       )}
     </div>

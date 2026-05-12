@@ -10,6 +10,29 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-12: WtImportページの自動Algoliaクロール停止
+**コミット:** `（コミット後に記載）`
+**ブランチ:** claude/wt-import-no-auto-fetch-k3mP
+
+### 変更内容
+- `frontend/src/pages/WtImport.tsx`: ページ表示時のAlgolia自動フェッチを廃止
+  - `useEffect(() => { fetchEvents() }, [])` を削除
+  - マウント時はDBの`importedIds`のみ取得（自サーバーへの軽量クエリ）
+  - `hasFetched`フラグを追加し、未取得時と0件時のメッセージを分離
+
+### 変更意図・背景
+WT過去大会インポートページを開くたびにAlgoliaへのリクエストが自動発行されており、不要な外部サービス負荷が発生していた。「データを取得」ボタンを明示的に押したときのみAlgoliaへクエリを投げる設計に変更。DBへのインポート済みID取得は自サーバーへの軽量クエリのため、引き続きマウント時に実行する。
+
+### 技術的決定事項
+- Algoliaは外部サービスであり、リクエスト制限・コスト・レスポンス時間の観点からオンデマンドのみに絞る
+- DB（`api.getImportedEventIds()`）は自サーバーへの軽量クエリなので、ページ表示時に取得して問題ない
+- `hasFetched`フラグで「未取得」と「取得済み0件」を区別し、適切なメッセージを表示
+
+### 残課題・次のステップ
+なし
+
+---
+
 ## 2026-05-12: Paratriathlon大会フィルタ修正・World Championships含める
 **コミット:** `77e9cf1`
 **ブランチ:** claude/fix-paratriathlon-filter-2BThk
