@@ -10,6 +10,26 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-12: 選手ページのグラフ大会名省略と表示件数制限
+**コミット:** `12dcbf6`
+**ブランチ:** claude/athlete-chart-name-limit-hY2w
+
+### 変更内容
+- `frontend/src/pages/AthleteDetail.tsx`:
+  - `shortenRaceName()`関数追加（"World Triathlon"・"Paratriathlon"・"Para"を除去して短縮）
+  - `AthleteCumulativeChart`の`sorted`に件数制限ロジックを追加（直近10件 OR 過去2年分の多い方）
+  - `chartData`の大会名を`shortenRaceName()`で短縮表示に変更
+
+### 変更意図・背景
+グラフX軸の大会名がすべて"World Triathlon"と表示されて識別できない問題を修正。"World Triathlon"はすべての大会に共通するため省略し、地名・カテゴリ名を優先表示する。また表示件数を制限しないとグラフが見づらくなるため、直近10件または過去2年分（多い方）に絞る。
+
+### 技術的決定事項
+- 大会名省略: "World Triathlon"を正規表現で除去、"Para"（接頭辞）も除去（このアプリはPara専用のため冗長）
+- 件数制限: `Math.max(10, 2年以内件数)`で計算し、`sorted.slice(-limit)`で最新側を取得
+- 上限24文字で切り詰め（超過時は末尾に「…」を付与）
+
+### 残課題・次のステップ
+なし
 ## 2026-05-12: 選手ページのセグメント強さ順位にメダルアイコンと1位差分を追加
 **コミット:** `27f8631`
 **ブランチ:** claude/athlete-seg-rank-medals-9fXq

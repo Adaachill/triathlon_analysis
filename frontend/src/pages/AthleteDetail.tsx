@@ -26,23 +26,40 @@ const CHECKPOINT_LABELS_A = [
   { headline: 'フィニッシュ', sub: '最終タイム',             icon: '🏁' },
 ]
 
+function shortenRaceName(name: string | null, raceId: number): string {
+  if (!name) return `Race ${raceId}`
+  const short = name
+    .replace(/World Triathlon\s*/gi, '')
+    .replace(/\bParatriathlon\b\s*/gi, '')
+    .replace(/\bPara\b\s*/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return short.length > 24 ? short.slice(0, 23) + '…' : short
+}
+
 function AthleteCumulativeChart({ races }: { races: AthleteRace[] }) {
   const [step, setStep] = useState(4)
   const [animKey, setAnimKey] = useState(0)
   const touchStartX = useRef<number | null>(null)
   const touchStartY = useRef<number | null>(null)
 
-  const sorted = useMemo(() =>
-    [...races]
+  const sorted = useMemo(() => {
+    const allSorted = [...races]
       .filter((r) => r.total_sec != null)
-      .sort((a, b) => (a.date || '').localeCompare(b.date || '')),
-    [races]
-  )
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+    // 直近2年以内の件数と10件の多い方を表示上限にする
+    const twoYearsAgo = new Date(Date.now() - 730 * DAYS)
+    const twoYearCount = allSorted.filter(
+      (r) => r.date && new Date(r.date) > twoYearsAgo
+    ).length
+    const limit = Math.max(10, twoYearCount)
+    return allSorted.slice(-limit)
+  }, [races])
 
   const chartData = useMemo(() =>
     sorted.map((r) => {
       const entry: Record<string, number | string> = {
-        name: r.race_name ? r.race_name.replace(/^20\d\d\s+/, '').slice(0, 20) : `Race ${r.race_id}`,
+        name: shortenRaceName(r.race_name, r.race_id),
       }
       SEG_CONFIG.forEach((seg, i) => {
         entry[seg.key as string] = i <= step ? ((r[seg.key] as number | null) ?? 0) : 0
