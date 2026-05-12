@@ -122,6 +122,7 @@ export default function WorldRanking() {
   const [uploadingEventId, setUploadingEventId] = useState<number | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState<number | null>(null)
+  const [raceNameInputs, setRaceNameInputs] = useState<Record<number, string>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadTargetEventId = useRef<string | null>(null)
 
@@ -173,7 +174,8 @@ export default function WorldRanking() {
   }
 
   const handleUploadClick = (ev: AlgoliaEvent) => {
-    uploadTargetEventId.current = JSON.stringify({ id: ev.id, date: ev.start_date })
+    const raceName = raceNameInputs[ev.id] ?? ev.name ?? ''
+    uploadTargetEventId.current = JSON.stringify({ id: ev.id, date: ev.start_date, name: raceName })
     setUploadingEventId(ev.id)
     setUploadError(null)
     setUploadSuccess(null)
@@ -189,8 +191,9 @@ export default function WorldRanking() {
     const targetInfo = JSON.parse(uploadTargetEventId.current)
     const targetId = String(targetInfo.id)
     const targetDate = targetInfo.date
+    const targetName = targetInfo.name || undefined
     try {
-      await api.uploadStartlist(file, targetId, targetDate)
+      await api.uploadStartlist(file, targetId, targetDate, targetName)
       setUploadSuccess(Number(targetId))
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'アップロードに失敗しました')
@@ -339,14 +342,24 @@ export default function WorldRanking() {
                     uploadSuccess === ev.id ? (
                       <span className="wr-upload-success-badge">✓ 登録済</span>
                     ) : (
-                      <button
-                        type="button"
-                        className="wr-sl-upload-btn"
-                        onClick={() => handleUploadClick(ev)}
-                        disabled={uploadingEventId !== null}
-                      >
-                        {uploadingEventId === ev.id ? '処理中...' : '📂 SLアップロード'}
-                      </button>
+                      <>
+                        <input
+                          type="text"
+                          className="wr-race-name-input"
+                          value={raceNameInputs[ev.id] ?? ev.name ?? ''}
+                          onChange={(e) => setRaceNameInputs((prev) => ({ ...prev, [ev.id]: e.target.value }))}
+                          placeholder="大会名（例: 2026 Para Series Yokohama）"
+                          disabled={uploadingEventId !== null}
+                        />
+                        <button
+                          type="button"
+                          className="wr-sl-upload-btn"
+                          onClick={() => handleUploadClick(ev)}
+                          disabled={uploadingEventId !== null}
+                        >
+                          {uploadingEventId === ev.id ? '処理中...' : '📂 SLアップロード'}
+                        </button>
+                      </>
                     )
                   )}
                 </div>

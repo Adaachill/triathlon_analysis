@@ -10,6 +10,33 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-12: スタートリスト登録時の大会名設定機能
+**コミット:** `TBD`
+**ブランチ:** claude/startlist-race-name-input-vR8x
+
+### 変更内容
+- `app/routers/predict.py`: `POST /predict/upload-startlist` に `race_name` クエリパラメータを追加
+  - 新規Raceレコード作成時に `name=race_name` を設定
+  - 既存Raceに名前が未設定の場合は `race_name` で上書き
+- `frontend/src/api.ts`: `uploadStartlist()` に `raceName?: string` 引数を追加し、`race_name` クエリパラメータとして送信
+- `frontend/src/pages/WorldRanking.tsx`: 期間内大会リストの各イベント行に大会名入力フィールドを追加
+  - Algoliaの `ev.name` を初期値として表示（ユーザーが編集可能）
+  - アップロード時に入力された名前をAPIに渡す
+- `frontend/src/pages/WorldRanking.css`: `.wr-race-name-input` スタイル追加
+
+### 変更意図・背景
+PR#37でスタートリストアップロード時にRaceレコードが自動作成されるようになったが、大会名（`race.name`）が設定されないため、DBには `event_id` のみが保存されていた。世界ランキング予測画面の「予測対象大会」一覧では `race.name` が表示されるため、「Race {id}」のような識別できない表示になっていた。
+
+### 技術的決定事項
+- Algoliaの `ev.name` を初期値として入力フィールドに表示し、ユーザーが短縮・編集できるようにした（例: "2026 World Triathlon Para Series Yokohama" → "2026 Para Series Yokohama"）
+- 既存Raceに名前がすでにある場合は上書きしない（Excel importで設定済みの名前を守る）
+- `raceNameInputs` stateをevent idをキーにした `Record<number, string>` で管理
+
+### 残課題・次のステップ
+- 登録済み大会の名称を後から編集するUIが必要な場合は `/races/{id}` PATCHエンドポイントを使用
+
+---
+
 ## 2026-05-12: 選手ページのグラフ大会名省略と表示件数制限
 **コミット:** `12dcbf6`
 **ブランチ:** claude/athlete-chart-name-limit-hY2w
