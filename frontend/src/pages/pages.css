@@ -1132,6 +1132,30 @@
   color: var(--text);
 }
 
+.seg-rank-chip.seg-rank-medal {
+  border-color: #d4af37;
+  background: rgba(212, 175, 55, 0.08);
+}
+
+.seg-medal-icon {
+  margin-right: 0.2rem;
+  font-size: 1rem;
+  vertical-align: middle;
+}
+
+.seg-rank-total {
+  color: var(--text-muted);
+  margin-left: 0.1rem;
+  font-size: 0.75rem;
+}
+
+.seg-rank-diff {
+  margin-left: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+}
+
 /* AthleteDetail: period stats table */
 .athlete-period-stats {
   margin-top: 1.25rem;

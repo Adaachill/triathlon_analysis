@@ -210,7 +210,25 @@ function segRank(rankings: RankingEntry[], athleteId: string, key: keyof Ranking
   const valid = rankings.filter(r => r[key] != null)
   valid.sort((a, b) => (a[key] as number) - (b[key] as number))
   const idx = valid.findIndex(r => r.athlete_id === athleteId)
-  return idx >= 0 ? { rank: idx + 1, total: valid.length } : null
+  if (idx < 0) return null
+  const firstVal = valid[0]?.[key] as number | null
+  const myVal = valid[idx]?.[key] as number | null
+  const diffFromFirst = firstVal != null && myVal != null && idx > 0 ? myVal - firstVal : null
+  return { rank: idx + 1, total: valid.length, diffFromFirst }
+}
+
+function medalIcon(rank: number): string {
+  if (rank === 1) return '🥇'
+  if (rank === 2) return '🥈'
+  if (rank === 3) return '🥉'
+  return ''
+}
+
+function fmtTimeDiff(sec: number | null): string {
+  if (sec == null || sec <= 0) return ''
+  const m = Math.floor(sec / 60)
+  const s = Math.round(sec % 60)
+  return `+${m}:${String(s).padStart(2, '0')}`
 }
 
 
@@ -333,11 +351,18 @@ export default function AthleteDetail() {
           if (ranks.length === 0) return null
           return (
             <div className="athlete-seg-ranks">
-              {ranks.map(({ label, result }) => (
-                <span key={label} className="seg-rank-chip">
-                  {label}: <strong>{result!.rank}位</strong> / {result!.total}人
-                </span>
-              ))}
+              {ranks.map(({ label, result }) => {
+                const medal = medalIcon(result!.rank)
+                const diff = fmtTimeDiff(result!.diffFromFirst)
+                return (
+                  <span key={label} className={`seg-rank-chip${result!.rank <= 3 ? ' seg-rank-medal' : ''}`}>
+                    {medal && <span className="seg-medal-icon">{medal}</span>}
+                    {label}: <strong>{result!.rank}位</strong>
+                    <span className="seg-rank-total">/{result!.total}人</span>
+                    {diff && <span className="seg-rank-diff">{diff}</span>}
+                  </span>
+                )
+              })}
             </div>
           )
         })()}
