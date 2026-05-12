@@ -146,12 +146,14 @@ async def upload_startlist(
     race_id: int | None = Query(default=None),
     event_id: str | None = Query(default=None),
     event_date: str | None = Query(default=None),
+    race_name: str | None = Query(default=None),
     session: Session = Depends(get_db),
 ):
     """
     スタートリスト Excel をアップロードして予想タイム・順位を返す。
     race_id/event_id が指定される場合は、Startlist テーブルに保存する。
     event_date は YYYY-MM-DD 形式で、大会の開催日（未来イベント向け）。
+    race_name は大会の正式名称（未指定の場合は既存の名称を維持）。
 
     対応カラム: "Member ID"（または "Athlete ID"）, "First Name", "Last Name",
                "Country", "Program Name", "Start Number"
@@ -187,9 +189,11 @@ async def upload_startlist(
                     race_date = date_.fromisoformat(event_date)
                 except ValueError:
                     pass
-            race = Race(event_id=event_id, date=race_date, points=500)
+            race = Race(event_id=event_id, date=race_date, points=500, name=race_name or None)
             session.add(race)
             session.flush()
+        elif race and race_name and not race.name:
+            race.name = race_name
 
         if race:
             for old in session.exec(

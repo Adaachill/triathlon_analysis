@@ -446,12 +446,13 @@ export const api = {
   getAthlete: (athleteId: string, programName: string) =>
     fetchApi<AthleteDetail>(`/athletes/${athleteId}`, { program_name: programName }),
   getEvaluation: () => fetchApi<EvalResult>('/admin/evaluate_difficulty'),
-  uploadStartlist: (file: File, eventId?: string, eventDate?: string) => {
+  uploadStartlist: (file: File, eventId?: string, eventDate?: string, raceName?: string) => {
     const form = new FormData();
     form.append('file', file);
     const params = new URLSearchParams();
     if (eventId) params.set('event_id', eventId);
     if (eventDate) params.set('event_date', eventDate);
+    if (raceName) params.set('race_name', raceName);
     const path = params.toString()
       ? `/predict/upload-startlist?${params.toString()}`
       : '/predict/upload-startlist';
