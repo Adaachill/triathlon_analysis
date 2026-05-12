@@ -244,20 +244,16 @@ export interface PredictAthlete {
   strength_t2: number | null;
   strength_run: number | null;
   pred_avg: PredictSegTimes;
-  pred_devonport: PredictSegTimes;
   rank_avg: number | null;
-  rank_devonport: number | null;
 }
 
 export interface PredictResponse {
   source_label: string;
   source_filename: string;
   categories: Record<string, PredictAthlete[]>;
-  devonport_race_id: number | null;
-  devonport_difficulties: Record<string, Record<string, number | null>>;
 }
 
-export type PredictionMode = 'none' | 'previous_year' | 'startlist_only' | 'startlist'
+export type PredictionMode = 'none' | 'previous_year' | 'startlist'
 
 export interface WorldRankingRace {
   race_id: number;
@@ -358,7 +354,8 @@ export async function getUpcomingEvents(daysAhead = 365): Promise<AlgoliaEvent[]
   return hits
     .filter((h) => {
       const s = (h.status ?? '').toUpperCase();
-      return s !== 'CANCELLED' && s !== 'POSTPONED';
+      if (s === 'CANCELLED' || s === 'POSTPONED') return false;
+      return h.sport_categories.includes('Paratriathlon');
     })
     .sort((a, b) => a.start_date.localeCompare(b.start_date));
 }
@@ -448,24 +445,23 @@ export const api = {
   getAthlete: (athleteId: string, programName: string) =>
     fetchApi<AthleteDetail>(`/athletes/${athleteId}`, { program_name: programName }),
   getEvaluation: () => fetchApi<EvalResult>('/admin/evaluate_difficulty'),
-  uploadStartlist: (file: File) => {
+  uploadStartlist: (file: File, eventId?: string) => {
     const form = new FormData();
     form.append('file', file);
-    return uploadApi<PredictResponse>('/predict/upload-startlist', form);
+    const path = eventId
+      ? `/predict/upload-startlist?event_id=${encodeURIComponent(eventId)}`
+      : '/predict/upload-startlist';
+    return uploadApi<PredictResponse>(path, form);
   },
   getWorldRanking: (
     programName: string,
     asOfDate: string,
     predictionMode: PredictionMode = 'none',
-    startlistEventIds: string[] = [],
   ) =>
     fetchApi<WorldRankingResponse>('/world-ranking', {
       program_name: programName,
       as_of_date: asOfDate,
       prediction_mode: predictionMode,
-      ...(startlistEventIds.length > 0
-        ? { startlist_event_ids: startlistEventIds.join(',') }
-        : {}),
     }),
   uploadRaceResult: (params: {
     file: File;

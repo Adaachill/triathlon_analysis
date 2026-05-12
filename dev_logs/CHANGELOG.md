@@ -10,6 +10,35 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-12: Devonport参照削除・予測モード整理・SLアップロードUI追加
+**コミット:** `e20429a`
+**ブランチ:** claude/cleanup-devonport-ui-fixes-Zk7m
+
+### 変更内容
+- `app/routers/predict.py`: DEVONPORT_2025_EVENT_IDと関連コード全削除、devonport_diffなし
+- `app/routers/world_ranking.py`: startlist_onlyモード・startlist_event_idsパラメータ削除
+- `frontend/src/api.ts`: PredictAthleteとPredictResponseからdevonport系フィールド削除、PredictionMode整理、getUpcomingEventsにParatriathlon専用フィルタ追加
+- `frontend/src/pages/Predict.tsx`: Devonportコースタブ廃止、平均コース予測のみに
+- `frontend/src/pages/Rankings.tsx`: 2026 Devonport差分表示機能を削除
+- `frontend/src/pages/WorldRanking.tsx`: startlist_onlyラジオボタン削除、期間内大会ごとにSLアップロードボタンを追加
+- `frontend/src/pages/WorldRanking.css`: アップロードボタン・成功バッジスタイル追加
+
+### 変更意図・背景
+- Devonport 2025/2026参照は特定大会に依存したハードコードで汎用性がなく、不要になったため削除
+- startlist_onlyは自動スタートリスト取得機能がなく機能として中途半端だったため削除
+- Paratriathlon以外の大会（World Triathlon大会のうち複数競技を含む大会）が選択肢に出ていた問題を修正
+
+### 技術的決定事項
+- 予測モードをnone/previous_year/startlistの3択に絞り、シンプル化
+- SLアップロードは期間内大会リストに直接ボタンを設けてevent_id付きでアップロード
+- Paratriathlon判定は`sport_categories.includes('Paratriathlon')`でフロント側フィルタリング
+
+### 残課題・次のステップ
+- スタートリスト登録後は予測ランキング再取得が必要（ページ再操作）
+- アップロード成功後に自動的に再計算するともっとスムーズ
+
+---
+
 ## 2026-05-12: 世界ランキング期間内大会表示・スタートリスト色分け
 **コミット:** `a3bf0c1`
 **ブランチ:** claude/future-races-start-list-Y5vxr
