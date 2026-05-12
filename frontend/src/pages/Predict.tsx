@@ -1,7 +1,7 @@
 import { useState, useRef, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { api, formatTime, formatDiff } from '../api'
-import type { PredictAthlete, PredictSegTimes, PredictResponse } from '../api'
+import type { PredictResponse } from '../api'
 import './pages.css'
 
 const PROGRAM_ORDER = [
