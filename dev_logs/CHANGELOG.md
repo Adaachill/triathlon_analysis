@@ -10,6 +10,28 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-12: Paratriathlon大会フィルタ修正・World Championships含める
+**コミット:** `77e9cf1`
+**ブランチ:** claude/fix-paratriathlon-filter-2BThk
+
+### 変更内容
+- `frontend/src/api.ts`: getUpcomingEvents()のAlgolia facetFilterとフロントエンドフィルタ条件を修正
+
+### 変更意図・背景
+PR#34の修正により、`sport_categories.includes('Paratriathlon')`のみでフィルタリングしていたため、World Championshipsのような親大会（specification_categories: Triathlon）が除外されていた。しかし、World Championshipsの子要素にはParatriathlon イベントが含まれるため、ユーザーは両方を見たい場合がある。
+
+### 技術的決定事項
+フィルタ条件を以下の OR 条件に変更：
+1. `specification_categories`に "Paratriathlon" を含む大会
+2. `specification_categories`に "Triathlon" を含む **かつ** `sport_categories`に "Paratriathlon" を含む大会
+
+これにより、Para専用大会だけでなく、Triathlon親大会でも子要素にParaを含む場合は表示される。
+
+### 残課題・次のステップ
+なし
+
+---
+
 ## 2026-05-12: Devonport参照削除・予測モード整理・SLアップロードUI追加
 **コミット:** `e20429a`
 **ブランチ:** claude/cleanup-devonport-ui-fixes-Zk7m
