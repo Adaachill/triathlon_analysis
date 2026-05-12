@@ -173,7 +173,7 @@ export default function WorldRanking() {
   }
 
   const handleUploadClick = (ev: AlgoliaEvent) => {
-    uploadTargetEventId.current = String(ev.id)
+    uploadTargetEventId.current = JSON.stringify({ id: ev.id, date: ev.start_date })
     setUploadingEventId(ev.id)
     setUploadError(null)
     setUploadSuccess(null)
@@ -186,9 +186,11 @@ export default function WorldRanking() {
       setUploadingEventId(null)
       return
     }
-    const targetId = uploadTargetEventId.current
+    const targetInfo = JSON.parse(uploadTargetEventId.current)
+    const targetId = String(targetInfo.id)
+    const targetDate = targetInfo.date
     try {
-      await api.uploadStartlist(file, targetId)
+      await api.uploadStartlist(file, targetId, targetDate)
       setUploadSuccess(Number(targetId))
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'アップロードに失敗しました')

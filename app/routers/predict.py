@@ -1,4 +1,5 @@
 """予想タイム・順位 API"""
+from datetime import date as date_
 from io import BytesIO
 
 import pandas as pd
@@ -144,11 +145,13 @@ async def upload_startlist(
     file: UploadFile = File(...),
     race_id: int | None = Query(default=None),
     event_id: str | None = Query(default=None),
+    event_date: str | None = Query(default=None),
     session: Session = Depends(get_db),
 ):
     """
     スタートリスト Excel をアップロードして予想タイム・順位を返す。
     race_id/event_id が指定される場合は、Startlist テーブルに保存する。
+    event_date は YYYY-MM-DD 形式で、大会の開催日（未来イベント向け）。
 
     対応カラム: "Member ID"（または "Athlete ID"）, "First Name", "Last Name",
                "Country", "Program Name", "Start Number"
@@ -178,7 +181,13 @@ async def upload_startlist(
 
         # Race が存在しない場合は、Algolia event_id から仮の Race を作成
         if not race and event_id:
-            race = Race(event_id=event_id)
+            race_date = None
+            if event_date:
+                try:
+                    race_date = date_.fromisoformat(event_date)
+                except ValueError:
+                    pass
+            race = Race(event_id=event_id, date=race_date, points=500)
             session.add(race)
             session.flush()
 
