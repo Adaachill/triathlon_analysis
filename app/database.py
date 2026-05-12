@@ -38,10 +38,38 @@ def init_db() -> None:
             ))
             conn.commit()
 
+        # 複合インデックス: ALS/ランキングの主要クエリパターンを高速化
+        result_indexes = [idx["name"] for idx in insp.get_indexes("result")]
+        if "idx_result_prog_status_total" not in result_indexes:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_result_prog_status_total "
+                "ON result (program_name, status, total_sec)"
+            ))
+            conn.commit()
+        if "idx_result_race_prog_status" not in result_indexes:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_result_race_prog_status "
+                "ON result (race_id, program_name, status)"
+            ))
+            conn.commit()
+        if "idx_result_athlete_prog" not in result_indexes:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_result_athlete_prog "
+                "ON result (athlete_id, program_name)"
+            ))
+            conn.commit()
+
 
 def _migrate_normalize_event_ids(conn, text) -> None:
     """Race.event_id / Result.event_id の float形式を正規化し、
     重複 Race が存在する場合は Results を集約して孤立 Race を削除する。"""
+    # float形式の event_id（"xxxxx.0"）が存在しない場合は処理をスキップ
+    has_float = conn.execute(
+        text("SELECT 1 FROM race WHERE event_id LIKE '%.%' LIMIT 1")
+    ).fetchone()
+    if not has_float:
+        return
+
     races = conn.execute(text("SELECT id, event_id FROM race ORDER BY id")).fetchall()
 
     for race_id, event_id in races:

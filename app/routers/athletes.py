@@ -40,12 +40,16 @@ async def get_athlete(
     strength_data = als_strengths.get(athlete_id)
     strength = strength_data.get("strength") if strength_data else None
 
-    # レースごとの詳細を取得
+    # レースを一括取得（N+1クエリを回避）
+    race_ids = list({r.race_id for r in results})
+    races_list = session.exec(select(Race).where(Race.id.in_(race_ids))).all()
+    race_map: dict[int, Race] = {race.id: race for race in races_list if race.id is not None}
+
     all_race_athletes_cache: dict[int, list] = {}
     race_details = []
 
     for r in results:
-        race = session.get(Race, r.race_id)
+        race = race_map.get(r.race_id)
         if not race:
             continue
 

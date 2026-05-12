@@ -35,6 +35,8 @@ async def upload_excel(
             points=points,
             note=note,
         )
+        from app.services.als_optimizer import invalidate_cache
+        invalidate_cache()
         return {"message": "Import successful", **result}
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))

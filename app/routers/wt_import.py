@@ -161,5 +161,8 @@ async def import_wt_event(
     finally:
         os.unlink(tmp_path)
 
+    if not result.get("skipped"):
+        from app.services.als_optimizer import invalidate_cache
+        invalidate_cache()
     msg = "Skipped (already imported)" if result.get("skipped") else "Import successful"
     return {"message": msg, **result}
