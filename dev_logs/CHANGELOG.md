@@ -10,6 +10,31 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-12: 選手ページのセグメント強さ順位にメダルアイコンと1位差分を追加
+**コミット:** `（コミット後に記載）`
+**ブランチ:** claude/athlete-seg-rank-medals-9fXq
+
+### 変更内容
+- `frontend/src/pages/AthleteDetail.tsx`:
+  - `segRank()`に`diffFromFirst`（1位との秒差）を返すよう拡張
+  - `medalIcon()`関数追加（1位→🥇、2位→🥈、3位→🥉）
+  - `fmtTimeDiff()`関数追加（秒数をMM:SS形式で表示）
+  - 順位表示チップにメダルアイコンと1位とのタイム差を追加
+- `frontend/src/pages/pages.css`: メダル用スタイル追加（金色ハイライト、差分テキスト）
+
+### 変更意図・背景
+選手ページに表示されるカテゴリ内のセグメント順位（総合・Swim・T1・Bike・T2・Run）において、1〜3位にはメダルアイコンを表示し、1位選手とのタイム差も表示することでパフォーマンスの相対比較を直感的にしたい。
+
+### 技術的決定事項
+- 既存の`segRank()`に`diffFromFirst`を追加する拡張で実装（破壊的変更なし）
+- メダルアイコンはCSS装飾（金色ボーダー+背景）とemoji絵文字の組み合わせ
+- 1位との差分は`+MM:SS`形式（1位本人は差分なし表示）
+
+### 残課題・次のステップ
+なし
+
+---
+
 ## 2026-05-12: Paratriathlon大会フィルタ修正・World Championships含める
 **コミット:** `77e9cf1`
 **ブランチ:** claude/fix-paratriathlon-filter-2BThk
