@@ -10,6 +10,27 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-12: メダル表示・セグメント順位が反映されない問題の修正
+**コミット:** `TBD`
+**ブランチ:** claude/fix-medal-display-rankings-W2usm
+
+### 変更内容
+- `app/routers/rankings.py`: `/rankings/top` エンドポイントの `limit` 上限を `le=200` → `le=500` に変更
+- `frontend/src/pages/WorldRanking.tsx`: `eventsBySport` のグルーピングキーを `sport_categories` 全結合から「Paratriathlon含む場合は"Paratriathlon"に統一」に変更
+
+### 変更意図・背景
+PR#39 でメダルアイコン・セグメント順位・1位差分の表示を実装したが、UIに反映されていなかった。原因は2つ：
+1. フロントエンドが `getRankings(selProgram, 500)` を呼ぶが、バックエンドの上限が `le=200` のため FastAPI が 422 Validation Error を返しており、`allRankings` が null のまま。メダルセクションは `{allRankings && ...}` で条件レンダリングされているため完全に非表示になっていた。
+2. Algolia の大会データは `sport_categories: ['Paratriathlon', 'Duathlon']` のように複数カテゴリを持つケースがあり、`join(', ')` でグルーピングキーを作ると "Paratriathlon, Duathlon" という optgroup ラベルが生まれ、Duathlon 大会が混入しているように見えていた。
+
+### 技術的決定事項
+- バックエンドの上限は 200 → 500 に増やした（パラトライアスロンは1カテゴリあたり最大でも数百名程度のため十分）
+- sport_categories のグルーピングは「Paratriathlon を含む → "Paratriathlon" 固定」とした（`getUpcomingEvents` で既にフィルタ済みのため他カテゴリが入ることはない）
+
+### 残課題・次のステップ
+- API の limit 上限と frontend 側の要求値の整合性をルール化（→ CLAUDE.md に追記）
+- 外部 API データのラベルをそのまま UI に使わないルールを明記（→ CLAUDE.md に追記）
+
 ## 2026-05-12: スタートリスト登録時の大会名設定機能
 **コミット:** `d76f00f`
 **ブランチ:** claude/startlist-race-name-input-vR8x
