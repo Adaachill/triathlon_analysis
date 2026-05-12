@@ -73,7 +73,6 @@ async def list_wt_para_events(
             "facetFilters": [
                 ["sport_categories:Triathlon"],
                 ["specification_categories:Paratriathlon"],
-                ["results_available:true"],
             ],
         }]
     }
@@ -95,6 +94,9 @@ async def list_wt_para_events(
 
     events = []
     for hit in hits:
+        # results_available が falsy なものはスキップ（facet設定不要のサーバー側フィルタリング）
+        if not hit.get("results_available"):
+            continue
         win_points = _detect_points(hit.get("event_categories", []))
         events.append({
             "id": hit["id"],

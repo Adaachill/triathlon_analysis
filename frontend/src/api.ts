@@ -363,7 +363,6 @@ export async function getPastParaEvents(yearsBack = 3): Promise<AlgoliaEvent[]> 
         facetFilters: [
           ['sport_categories:Triathlon'],
           ['specification_categories:Paratriathlon'],
-          ['results_available:true'],
         ],
       }],
     }),
@@ -371,7 +370,10 @@ export async function getPastParaEvents(yearsBack = 3): Promise<AlgoliaEvent[]> 
   if (!res.ok) throw new Error(`Algolia error: ${res.status}`);
   const data = await res.json();
   const hits: AlgoliaEvent[] = data.results?.[0]?.hits ?? [];
-  return hits.sort((a, b) => b.start_date.localeCompare(a.start_date));
+  // results_available はフロントエンド側でフィルタリング（facet 設定の有無に依存しないため）
+  return hits
+    .filter((h) => h.results_available)
+    .sort((a, b) => b.start_date.localeCompare(a.start_date));
 }
 
 export interface WtParaEvent {
