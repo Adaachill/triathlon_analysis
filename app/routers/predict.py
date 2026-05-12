@@ -176,6 +176,12 @@ async def upload_startlist(
         elif event_id:
             race = session.exec(select(Race).where(Race.event_id == event_id)).first()
 
+        # Race が存在しない場合は、Algolia event_id から仮の Race を作成
+        if not race and event_id:
+            race = Race(event_id=event_id)
+            session.add(race)
+            session.flush()
+
         if race:
             for old in session.exec(
                 select(Startlist).where(Startlist.event_id == race.event_id)
