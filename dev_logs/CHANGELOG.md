@@ -10,6 +10,37 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-12: 世界ランキング期間内大会表示・スタートリスト色分け
+**コミット:** `a3bf0c1`
+**ブランチ:** claude/future-races-start-list-Y5vxr
+
+### 変更内容
+- `frontend/src/App.tsx`: WT大会インポートナビゲーションリンクの重複削除（3個→1個）
+- `frontend/src/pages/WorldRanking.tsx`: 未来日付選択時に期間内大会の一覧表示機能を追加
+  - `eventsInRange` useMemoで期間内イベントをフィルタリング
+  - 期間内大会リストセクションをUIに追加（折りたたみなし、常時表示）
+- `frontend/src/pages/WorldRanking.css`: 期間内大会リスト用スタイルを追加
+  - SL公開済み大会: 緑背景（`.wr-event-startlist`）
+  - SL未公開大会: グレー背景（`.wr-event-no-startlist`）
+
+### 変更意図・背景
+ユーザーが未来の大会を選択した際に、その日までに開催される大会を一覧で確認できるようにした。
+大会ごとにスタートリストの公開状況を色分けして表示し、どの大会のスタートリストが
+利用可能かを一目で判別できるようにした。
+
+### 技術的決定事項
+- **期間フィルタリング位置**: フロント側で実施（Algolia APIから既に取得済みの`upcomingEvents`から抽出）
+- **色分け基準**: Algolia APIの`ev.startlist_available`フラグを使用
+- **表示タイミング**: `dateMode='from_race'` かつ `selectedEvent` 存在時のみ表示
+
+### 残課題・次のステップ
+- **要件3への対応が必要**: スタートリストが公開済みの大会の参加者を直接取得して予測する機能
+  - 現在は「前年同一大会の参加者」で予測しており、スタートリスト有無は色分け表示のみ
+  - World Triathlon APIからスタートリストを取得するか、Excelアップロード→DB保存の仕組みが必要
+  - 実装方法をユーザーと相談が必要
+
+---
+
 ## 2026-05-12: ALS精度評価のデータリーク修正・半減期比較API追加
 **コミット:** `f0e42db`
 **ブランチ:** claude/improve-als-accuracy-iY9qX
