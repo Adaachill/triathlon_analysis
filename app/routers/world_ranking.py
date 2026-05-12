@@ -1,75 +1,68 @@
 """世界ランキングAPI（開発中）"""
+import re
 from datetime import date, timedelta
 from fastapi import APIRouter, Query, Depends
 from sqlmodel import Session, select
 from app.deps import get_db
 from app.models import Race, Result
-from app.services.als_optimizer import get_optimized_program
 
 router = APIRouter(prefix="/world-ranking", tags=["world-ranking"])
 
 DECAY = 0.925  # 順位ごとのポイント減衰率
-
-# 予測に使用する最大出場選手数（強さ上位N名を仮想参加者とする）
-_PREDICTION_MAX_ATHLETES = 30
+_PREDICTION_MODES = ("none", "previous_year", "startlist_only")
 
 
 def _calc_position_points(win_points: int, position: int) -> float:
-    """順位に応じたポイントを計算。1位=win_points, n位=win_points * 0.925^(n-1)"""
     return win_points * (DECAY ** (position - 1))
 
 
-@router.get("")
-async def get_world_ranking(
-    as_of_date: str = Query(..., description="基準日 (YYYY-MM-DD)"),
-    program_name: str = Query(..., description="カテゴリ名"),
-    prediction_mode: str = Query(
-        "none",
-        description="未来レースの予測モード: none / all / startlist_only",
-    ),
-    startlist_event_ids: str = Query(
-        "",
-        description="スタートリスト公開済みのAlgolia event_id（カンマ区切り）。prediction_mode=startlist_onlyのとき使用",
-    ),
-    session: Session = Depends(get_db),
-):
+def _normalize_race_name(name: str | None) -> str:
+    """年号（4桁数字）を除去して正規化"""
+    if not name:
+        return ""
+    return re.sub(r"\b\d{4}\b", "", name).strip().lower()
+
+
+def _find_prev_year_race(future_race: Race, all_races: list[Race]) -> Race | None:
+    """前年の同一大会（年号以外のレース名が一致）を検索"""
+    if not future_race.date or not future_race.name:
+        return None
+    target_year = future_race.date.year
+    target_norm = _normalize_race_name(future_race.name)
+    if not target_norm:
+        return None
+    best: Race | None = None
+    for r in all_races:
+        if r.date and r.date.year == target_year - 1 and r.id != future_race.id:
+            if _normalize_race_name(r.name) == target_norm:
+                if best is None or r.date > best.date:
+                    best = r
+    return best
+
+
+def _compute_rankings(
+    session: Session,
+    program_name: str,
+    cutoff: date,
+    period1_start: date,
+    period2_start: date,
+    prediction_mode: str,
+    startlist_ids: set[str],
+    all_races: list[Race],
+    today: date,
+) -> tuple[list[dict], list[dict]]:
     """
-    指定日時点での世界ランキングを計算する。
+    ランキングを計算して (rankings, predicted_races) を返す。
 
-    - Period1: 基準日から過去365日以内のレース（全ポイント）
-    - Period2: 基準日から366〜730日前のレース（ポイントの1/3）
-    - 各期間の上位3大会のみ加算
-
-    prediction_mode:
-    - none: 今日以前の実績レースのみ使用（デフォルト）
-    - all: 基準日までの未来レースをすべて強さランク順で予測
-    - startlist_only: startlist_event_ids で指定したレースのみ予測
+    predicted_races: 予測に使った未来レースの情報リスト
     """
-    as_of = date.fromisoformat(as_of_date)
-    today = date.today()
-    period1_start = as_of - timedelta(days=365)
-    period2_start = as_of - timedelta(days=730)
-
-    include_predictions = prediction_mode != "none"
-
-    # ポイントが設定されているレースを取得
-    races = session.exec(
-        select(Race).where(Race.points.isnot(None), Race.date.isnot(None))
-    ).all()
-
-    cutoff = as_of if include_predictions else min(as_of, today)
-
-    # startlist_only モードのとき、フロントエンドが渡した event_id セットを保持
-    startlist_ids: set[str] = set()
-    if prediction_mode == "startlist_only" and startlist_event_ids:
-        startlist_ids = {eid.strip() for eid in startlist_event_ids.split(",") if eid.strip()}
-
     period1_race_ids: set[int] = set()
     period2_race_ids: set[int] = set()
-    race_info: dict[int, dict] = {}
     future_race_ids: set[int] = set()
+    race_info: dict[int, dict] = {}
+    race_obj_map: dict[int, Race] = {}
 
-    for r in races:
+    for r in all_races:
         if r.date is None or r.points is None or r.id is None:
             continue
         is_future = r.date > today
@@ -80,108 +73,273 @@ async def get_world_ranking(
             "is_future": is_future,
             "event_id": r.event_id or "",
         }
+        race_obj_map[r.id] = r
+
         if period1_start < r.date <= cutoff:
-            # 未来レースで startlist_only モードの場合、startlist_ids に含まれないものはスキップ
-            if is_future and prediction_mode == "startlist_only":
-                if r.event_id and r.event_id in startlist_ids:
+            if is_future and prediction_mode != "none":
+                # startlist_only の場合は startlist_ids に含まれるもののみ
+                if prediction_mode == "startlist_only":
+                    if r.event_id and r.event_id in startlist_ids:
+                        period1_race_ids.add(r.id)
+                        future_race_ids.add(r.id)
+                else:
                     period1_race_ids.add(r.id)
                     future_race_ids.add(r.id)
-            else:
+            elif not is_future:
                 period1_race_ids.add(r.id)
-                if is_future:
-                    future_race_ids.add(r.id)
         elif period2_start < r.date <= period1_start:
             period2_race_ids.add(r.id)
 
     all_race_ids = period1_race_ids | period2_race_ids
     if not all_race_ids:
-        return _empty_response(program_name, as_of_date, period1_start, period2_start, prediction_mode)
+        return [], []
 
-    # 対象レースの実績結果を取得（過去レースのみ）
+    # 過去レースの実績結果を取得
     past_race_ids = {rid for rid in all_race_ids if rid not in future_race_ids}
-    results = []
+    athlete_race_points: dict[str, dict[int, float]] = {}
+    athlete_info: dict[str, dict] = {}
+
     if past_race_ids:
-        results = session.exec(
+        for r in session.exec(
             select(Result).where(
                 Result.race_id.in_(list(past_race_ids)),
                 Result.program_name == program_name,
                 Result.status == "Finished",
                 Result.position.isnot(None),
             )
-        ).all()
+        ).all():
+            if r.race_id not in race_info or r.position is None:
+                continue
+            earned = _calc_position_points(race_info[r.race_id]["points"], r.position)
+            athlete_race_points.setdefault(r.athlete_id, {})[r.race_id] = earned
+            if r.athlete_id not in athlete_info:
+                athlete_info[r.athlete_id] = {
+                    "first_name": r.first_name,
+                    "last_name": r.last_name,
+                    "country": r.country,
+                }
 
-    # 選手ごと・レースごとにポイントを集計
-    athlete_race_points: dict[str, dict[int, float]] = {}
-    athlete_info: dict[str, dict] = {}
-
-    for r in results:
-        if r.race_id not in race_info or r.position is None:
-            continue
-        win_pts = race_info[r.race_id]["points"]
-        earned = _calc_position_points(win_pts, r.position)
-        athlete_race_points.setdefault(r.athlete_id, {})[r.race_id] = earned
-        if r.athlete_id not in athlete_info:
-            athlete_info[r.athlete_id] = {
-                "first_name": r.first_name,
-                "last_name": r.last_name,
-                "country": r.country,
-            }
-
-    # 未来レースの予測ポイントを追加（強さランク順を予測順位として使用）
-    if include_predictions and future_race_ids:
-        _apply_prediction(
+    # 未来レースの予測（前年同一大会の参加者を使用）
+    predicted_races: list[dict] = []
+    if prediction_mode != "none" and future_race_ids:
+        predicted_races = _apply_prediction_from_prev_year(
             session=session,
             program_name=program_name,
             future_race_ids=future_race_ids,
+            all_races=all_races,
             race_info=race_info,
+            race_obj_map=race_obj_map,
             athlete_race_points=athlete_race_points,
             athlete_info=athlete_info,
         )
 
-    # 選手ごとにランキングポイントを計算
+    # ランキング計算
     rankings = []
     for athlete_id, race_pts in athlete_race_points.items():
-        # Period1: 上位3大会
         p1_pts = {rid: pts for rid, pts in race_pts.items() if rid in period1_race_ids}
         p1_top3 = sorted(p1_pts.values(), reverse=True)[:3]
         p1_total = sum(p1_top3)
 
-        # Period2: 上位3大会（合計の1/3）
         p2_pts = {rid: pts for rid, pts in race_pts.items() if rid in period2_race_ids}
         p2_top3 = sorted(p2_pts.values(), reverse=True)[:3]
         p2_total = sum(p2_top3) / 3
 
         total = p1_total + p2_total
 
-        # 貢献レース詳細
         p1_races = sorted(
-            [{"race_id": rid, "race_name": race_info[rid]["name"], "date": race_info[rid]["date"],
-              "points": pts, "is_future": race_info[rid]["is_future"]}
-             for rid, pts in p1_pts.items()],
-            key=lambda x: x["points"], reverse=True
+            [
+                {
+                    "race_id": rid,
+                    "race_name": race_info[rid]["name"],
+                    "date": race_info[rid]["date"],
+                    "points": pts,
+                    "is_future": race_info[rid]["is_future"],
+                    "is_counted": idx < 3,
+                }
+                for idx, (rid, pts) in enumerate(
+                    sorted(p1_pts.items(), key=lambda x: x[1], reverse=True)
+                )
+            ],
+            key=lambda x: x["points"],
+            reverse=True,
         )
         p2_races = sorted(
-            [{"race_id": rid, "race_name": race_info[rid]["name"], "date": race_info[rid]["date"],
-              "points": pts, "is_future": race_info[rid]["is_future"]}
-             for rid, pts in p2_pts.items()],
-            key=lambda x: x["points"], reverse=True
+            [
+                {
+                    "race_id": rid,
+                    "race_name": race_info[rid]["name"],
+                    "date": race_info[rid]["date"],
+                    "points": pts,
+                    "is_future": race_info[rid]["is_future"],
+                    "is_counted": idx < 3,
+                }
+                for idx, (rid, pts) in enumerate(
+                    sorted(p2_pts.items(), key=lambda x: x[1], reverse=True)
+                )
+            ],
+            key=lambda x: x["points"],
+            reverse=True,
         )
 
         info = athlete_info[athlete_id]
-        rankings.append({
-            "athlete_id": athlete_id,
-            "first_name": info["first_name"],
-            "last_name": info["last_name"],
-            "country": info["country"],
-            "total_points": round(total, 2),
-            "period1_points": round(p1_total, 2),
-            "period2_points_raw": round(sum(p2_top3), 2),
-            "period2_points": round(p2_total, 2),
-            "period1_races": p1_races,
-            "period2_races": p2_races,
-        })
+        rankings.append(
+            {
+                "athlete_id": athlete_id,
+                "first_name": info["first_name"],
+                "last_name": info["last_name"],
+                "country": info["country"],
+                "total_points": round(total, 2),
+                "period1_points": round(p1_total, 2),
+                "period2_points_raw": round(sum(p2_top3), 2),
+                "period2_points": round(p2_total, 2),
+                "period1_races": p1_races,
+                "period2_races": p2_races,
+            }
+        )
 
     rankings.sort(key=lambda x: x["total_points"], reverse=True)
+    return rankings, predicted_races
+
+
+def _apply_prediction_from_prev_year(
+    session: Session,
+    program_name: str,
+    future_race_ids: set[int],
+    all_races: list[Race],
+    race_info: dict[int, dict],
+    race_obj_map: dict[int, Race],
+    athlete_race_points: dict[str, dict[int, float]],
+    athlete_info: dict[str, dict],
+) -> list[dict]:
+    """前年同一大会の参加者を使って予測ポイントを計算。predicted_races リストを返す"""
+    predicted_races: list[dict] = []
+
+    for race_id in future_race_ids:
+        ri = race_info.get(race_id)
+        future_race = race_obj_map.get(race_id)
+        if ri is None or future_race is None:
+            continue
+
+        prev_race = _find_prev_year_race(future_race, all_races)
+        if prev_race is None:
+            continue
+
+        prev_results = session.exec(
+            select(Result).where(
+                Result.race_id == prev_race.id,
+                Result.program_name == program_name,
+                Result.status == "Finished",
+                Result.position.isnot(None),
+            )
+        ).all()
+        if not prev_results:
+            continue
+
+        win_pts = ri["points"]
+        added_count = 0
+        for result in sorted(prev_results, key=lambda x: x.position or 9999):
+            if result.position is None:
+                continue
+            earned = _calc_position_points(win_pts, result.position)
+            # 実績がある場合は上書きしない
+            if race_id not in athlete_race_points.get(result.athlete_id, {}):
+                athlete_race_points.setdefault(result.athlete_id, {})[race_id] = earned
+                added_count += 1
+            if result.athlete_id not in athlete_info:
+                athlete_info[result.athlete_id] = {
+                    "first_name": result.first_name,
+                    "last_name": result.last_name,
+                    "country": result.country,
+                }
+
+        if added_count > 0:
+            predicted_races.append(
+                {
+                    "race_id": race_id,
+                    "race_name": ri["name"],
+                    "date": ri["date"],
+                    "points": ri["points"],
+                    "based_on_race_id": prev_race.id,
+                    "based_on_race_name": prev_race.name,
+                    "participants_count": added_count,
+                }
+            )
+
+    return predicted_races
+
+
+@router.get("")
+async def get_world_ranking(
+    as_of_date: str = Query(..., description="基準日 (YYYY-MM-DD)"),
+    program_name: str = Query(..., description="カテゴリ名"),
+    prediction_mode: str = Query(
+        "none",
+        description="予測モード: none / previous_year / startlist_only",
+    ),
+    startlist_event_ids: str = Query(
+        "",
+        description="スタートリスト公開済みのevent_id（カンマ区切り）。startlist_onlyのとき使用",
+    ),
+    session: Session = Depends(get_db),
+):
+    """
+    指定日時点での世界ランキングを計算する。
+
+    - Period1: 基準日から過去365日以内（全ポイント、上位3大会）
+    - Period2: 基準日から366〜730日前（ポイントの1/3、上位3大会）
+
+    prediction_mode:
+    - none: 実績のみ（デフォルト）
+    - previous_year: 前年同一大会の参加者で予測
+    - startlist_only: startlist_event_ids の大会のみ前年参加者で予測
+
+    未来日付の場合、今日時点のベースラインランキングも baseline_rankings として返す。
+    """
+    as_of = date.fromisoformat(as_of_date)
+    today = date.today()
+    period1_start = as_of - timedelta(days=365)
+    period2_start = as_of - timedelta(days=730)
+
+    startlist_ids: set[str] = set()
+    if prediction_mode == "startlist_only" and startlist_event_ids:
+        startlist_ids = {e.strip() for e in startlist_event_ids.split(",") if e.strip()}
+
+    # ポイント設定済みの全レースを取得（予測に前年分も必要なため制限しない）
+    all_races = session.exec(
+        select(Race).where(Race.points.isnot(None), Race.date.isnot(None))
+    ).all()
+
+    include_predictions = prediction_mode != "none"
+    cutoff = as_of if include_predictions else min(as_of, today)
+
+    rankings, predicted_races = _compute_rankings(
+        session=session,
+        program_name=program_name,
+        cutoff=cutoff,
+        period1_start=period1_start,
+        period2_start=period2_start,
+        prediction_mode=prediction_mode,
+        startlist_ids=startlist_ids,
+        all_races=list(all_races),
+        today=today,
+    )
+
+    # 未来日付 & 予測あり → 今日時点のベースラインも計算して差分表示に使う
+    baseline_rankings: list[dict] | None = None
+    if as_of > today and include_predictions:
+        baseline_period1_start = today - timedelta(days=365)
+        baseline_period2_start = today - timedelta(days=730)
+        baseline_rankings, _ = _compute_rankings(
+            session=session,
+            program_name=program_name,
+            cutoff=today,
+            period1_start=baseline_period1_start,
+            period2_start=baseline_period2_start,
+            prediction_mode="none",
+            startlist_ids=set(),
+            all_races=list(all_races),
+            today=today,
+        )
 
     return {
         "program_name": program_name,
@@ -192,79 +350,6 @@ async def get_world_ranking(
         "previous_start": str(period2_start + timedelta(days=1)),
         "previous_end": str(period1_start),
         "rankings": rankings,
-    }
-
-
-def _apply_prediction(
-    session: Session,
-    program_name: str,
-    future_race_ids: set[int],
-    race_info: dict[int, dict],
-    athlete_race_points: dict[str, dict[int, float]],
-    athlete_info: dict[str, dict],
-) -> None:
-    """強さランク順を予測順位として未来レースのポイントを athlete_race_points に追加する（破壊的更新）"""
-    try:
-        opt = get_optimized_program(session, program_name)
-    except Exception:
-        return
-
-    athlete_strengths = opt.get("athlete_strengths", {})
-    if not athlete_strengths:
-        return
-
-    # 強さでソート（値が小さいほど速い = 上位）
-    ranked_athletes = sorted(
-        [(aid, s["strength"]) for aid, s in athlete_strengths.items() if s.get("strength") is not None],
-        key=lambda x: x[1],
-    )[:_PREDICTION_MAX_ATHLETES]
-
-    if not ranked_athletes:
-        return
-
-    # 名前・国情報を取得（既存の athlete_info を流用、なければ Result から補完）
-    known_ids = set(athlete_info.keys())
-    missing_ids = {aid for aid, _ in ranked_athletes} - known_ids
-    if missing_ids:
-        name_rows = session.exec(
-            select(Result).where(
-                Result.athlete_id.in_(list(missing_ids)),
-                Result.program_name == program_name,
-            )
-        ).all()
-        for row in name_rows:
-            if row.athlete_id not in athlete_info:
-                athlete_info[row.athlete_id] = {
-                    "first_name": row.first_name,
-                    "last_name": row.last_name,
-                    "country": row.country,
-                }
-
-    for race_id in future_race_ids:
-        ri = race_info.get(race_id)
-        if ri is None:
-            continue
-        win_pts = ri["points"]
-        for position, (athlete_id, _) in enumerate(ranked_athletes, 1):
-            if athlete_id not in athlete_info:
-                continue
-            earned = _calc_position_points(win_pts, position)
-            # 実績がある場合は実績を優先（上書きしない）
-            existing = athlete_race_points.get(athlete_id, {})
-            if race_id not in existing:
-                athlete_race_points.setdefault(athlete_id, {})[race_id] = earned
-
-
-def _empty_response(
-    program_name: str, as_of_date: str, period1_start: date, period2_start: date, prediction_mode: str = "none"
-) -> dict:
-    return {
-        "program_name": program_name,
-        "as_of_date": as_of_date,
-        "prediction_mode": prediction_mode,
-        "current_start": str(period1_start + timedelta(days=1)),
-        "current_end": as_of_date,
-        "previous_start": str(period2_start + timedelta(days=1)),
-        "previous_end": str(period1_start),
-        "rankings": [],
+        "predicted_races": predicted_races,
+        "baseline_rankings": baseline_rankings,
     }

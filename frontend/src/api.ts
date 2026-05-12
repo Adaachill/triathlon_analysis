@@ -257,12 +257,15 @@ export interface PredictResponse {
   devonport_difficulties: Record<string, Record<string, number | null>>;
 }
 
+export type PredictionMode = 'none' | 'previous_year' | 'startlist_only'
+
 export interface WorldRankingRace {
   race_id: number;
   race_name: string | null;
   date: string;
   points: number;
   is_future: boolean;
+  is_counted: boolean;
 }
 
 export interface WorldRankingEntry {
@@ -278,15 +281,27 @@ export interface WorldRankingEntry {
   period2_races: WorldRankingRace[];
 }
 
+export interface WorldRankingPredictedRace {
+  race_id: number;
+  race_name: string | null;
+  date: string;
+  points: number;
+  based_on_race_id: number;
+  based_on_race_name: string | null;
+  participants_count: number;
+}
+
 export interface WorldRankingResponse {
   program_name: string;
   as_of_date: string;
-  prediction_mode: string;
+  prediction_mode: PredictionMode;
   current_start: string;
   current_end: string;
   previous_start: string;
   previous_end: string;
   rankings: WorldRankingEntry[];
+  predicted_races: WorldRankingPredictedRace[];
+  baseline_rankings: WorldRankingEntry[] | null;
 }
 
 // World Triathlon Algolia search API (public search-only key)
@@ -440,7 +455,7 @@ export const api = {
   getWorldRanking: (
     programName: string,
     asOfDate: string,
-    predictionMode: 'none' | 'all' | 'startlist_only' = 'none',
+    predictionMode: PredictionMode = 'none',
     startlistEventIds: string[] = [],
   ) =>
     fetchApi<WorldRankingResponse>('/world-ranking', {

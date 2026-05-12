@@ -365,3 +365,138 @@
   margin-left: 0.3rem;
   letter-spacing: 0.03em;
 }
+
+/* 予測対象大会セクション */
+.wr-predicted-races-section {
+  margin: 0.5rem 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.wr-predicted-races-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  background: var(--bg-hover);
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+}
+
+.wr-predicted-races-toggle:hover {
+  background: var(--border);
+}
+
+.wr-predicted-races-list {
+  padding: 0.25rem 0;
+}
+
+.wr-predicted-race-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.75rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.83rem;
+  border-top: 1px solid var(--border);
+}
+
+.wr-predicted-race-name {
+  font-weight: 600;
+  color: var(--text);
+  flex: 1 1 200px;
+}
+
+.wr-predicted-race-date {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.wr-predicted-race-pts {
+  font-family: var(--font-mono, monospace);
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.wr-predicted-race-based {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  flex: 1 1 200px;
+}
+
+.wr-predicted-race-n {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.wr-predicted-races-empty {
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  margin: 0.4rem 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-hover);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+/* 差分カラム */
+.wr-diff-col {
+  white-space: nowrap;
+}
+
+.wr-rank-diff {
+  font-size: 0.82rem;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-muted);
+}
+
+.wr-rank-diff-arrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-left: 0.15rem;
+}
+
+.wr-up .wr-rank-diff-arrow,
+td.wr-up {
+  color: #15803d;
+}
+
+.wr-down .wr-rank-diff-arrow,
+td.wr-down {
+  color: #dc2626;
+}
+
+.wr-same .wr-rank-diff-arrow,
+td.wr-same {
+  color: var(--text-muted);
+}
+
+.wr-new-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  background: rgba(147, 51, 234, 0.12);
+  color: #7c3aed;
+  border: 1px solid rgba(147, 51, 234, 0.25);
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.wr-diff-legend {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-left: 0.5rem;
+}
+
+/* 予測大会のハイライト（詳細展開行内） */
+.wr-predicted-highlight {
+  background: rgba(234, 179, 8, 0.07);
+  border-left: 3px solid rgba(234, 179, 8, 0.5);
+  padding-left: calc(0.4rem - 3px);
+}

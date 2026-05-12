@@ -1,12 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { api, getUpcomingEvents } from '../api'
-import type { WorldRankingEntry, AlgoliaEvent } from '../api'
+import type { WorldRankingEntry, WorldRankingPredictedRace, AlgoliaEvent, PredictionMode } from '../api'
 import './pages.css'
 import './WorldRanking.css'
 
 type DateMode = 'direct' | 'from_race'
-type PredictionMode = 'none' | 'all' | 'startlist_only'
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
@@ -22,6 +21,11 @@ function sportLabel(ev: AlgoliaEvent): string {
   return ev.sport_categories.join(' / ')
 }
 
+function fmtDiff(n: number, plus = true): string {
+  if (n === 0) return '±0'
+  return (n > 0 && plus ? '+' : '') + n.toFixed(n % 1 === 0 ? 0 : 1)
+}
+
 export default function WorldRanking() {
   const [programs, setPrograms] = useState<string[]>([])
   const [program, setProgram] = useState('')
@@ -32,6 +36,7 @@ export default function WorldRanking() {
   const [eventsError, setEventsError] = useState<string | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null)
   const [predictionMode, setPredictionMode] = useState<PredictionMode>('none')
+  const [showPredictedRaces, setShowPredictedRaces] = useState(false)
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getWorldRanking>> | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -67,12 +72,10 @@ export default function WorldRanking() {
     return directDate
   }, [dateMode, selectedEvent, directDate])
 
-  // startlist_only モード用: スタートリスト公開済みのイベントIDを収集
-  const startlistEventIds = useMemo(() => {
-    return upcomingEvents
-      .filter((ev) => ev.startlist_available)
-      .map((ev) => String(ev.id))
-  }, [upcomingEvents])
+  const startlistEventIds = useMemo(
+    () => upcomingEvents.filter((ev) => ev.startlist_available).map((ev) => String(ev.id)),
+    [upcomingEvents],
+  )
 
   useEffect(() => {
     if (!program || !asOfDate) return
@@ -100,6 +103,24 @@ export default function WorldRanking() {
 
   const today = todayStr()
   const isFutureDate = asOfDate > today
+
+  // ベースライン（今日時点）のランキング → athlete_id → {rank, total_points}
+  const baselineMap = useMemo(() => {
+    if (!data?.baseline_rankings) return {} as Record<string, { rank: number; total_points: number }>
+    const map: Record<string, { rank: number; total_points: number }> = {}
+    data.baseline_rankings.forEach((entry, idx) => {
+      map[entry.athlete_id] = { rank: idx + 1, total_points: entry.total_points }
+    })
+    return map
+  }, [data])
+
+  const hasDiff = Object.keys(baselineMap).length > 0
+
+  // 予測対象レースの race_id セット（ハイライト用）
+  const predictedRaceIds = useMemo(
+    () => new Set((data?.predicted_races ?? []).map((r) => r.race_id)),
+    [data],
+  )
 
   const eventsBySport = useMemo(() => {
     const groups: Record<string, AlgoliaEvent[]> = {}
@@ -201,9 +222,7 @@ export default function WorldRanking() {
                     {selectedEvent.results_available && (
                       <span className="wr-badge wr-badge-results">結果あり</span>
                     )}
-                    <span className="wr-badge wr-badge-sport">
-                      {sportLabel(selectedEvent)}
-                    </span>
+                    <span className="wr-badge wr-badge-sport">{sportLabel(selectedEvent)}</span>
                   </div>
                 </div>
               )}
@@ -234,6 +253,16 @@ export default function WorldRanking() {
               <input
                 type="radio"
                 name="predictionMode"
+                value="previous_year"
+                checked={predictionMode === 'previous_year'}
+                onChange={() => setPredictionMode('previous_year')}
+              />
+              <span>前年同一大会の参加者で予測</span>
+            </label>
+            <label className="wr-prediction-option">
+              <input
+                type="radio"
+                name="predictionMode"
                 value="startlist_only"
                 checked={predictionMode === 'startlist_only'}
                 onChange={() => setPredictionMode('startlist_only')}
@@ -245,26 +274,46 @@ export default function WorldRanking() {
                 )}
               </span>
             </label>
-            <label className="wr-prediction-option">
-              <input
-                type="radio"
-                name="predictionMode"
-                value="all"
-                checked={predictionMode === 'all'}
-                onChange={() => setPredictionMode('all')}
-              />
-              <span>全未来大会を予測</span>
-            </label>
           </div>
           {predictionMode !== 'none' && (
             <p className="wr-predictions-note">
-              ※ 予測は過去の強さランキング（上位{30}名）を元にした順位推定です。実際の出場者・結果と異なる場合があります。
-              {predictionMode === 'startlist_only' && (
-                <> スタートリスト公開済み大会のAlgolia IDをバックエンドに渡して絞り込みます（DBのevent_idと一致する大会のみ反映されます）。</>
-              )}
+              ※ 前年の同一大会（年号以外のレース名が一致）の参加者・順位をそのまま適用して予測します。前年大会がない場合はスキップ。
             </p>
           )}
         </div>
+
+        {/* 予測対象大会の一覧 */}
+        {data && predictionMode !== 'none' && data.predicted_races.length > 0 && (
+          <div className="wr-predicted-races-section">
+            <button
+              type="button"
+              className="wr-predicted-races-toggle"
+              onClick={() => setShowPredictedRaces((v) => !v)}
+            >
+              {showPredictedRaces ? '▼' : '▶'} 予測対象大会（{data.predicted_races.length}件）
+            </button>
+            {showPredictedRaces && (
+              <div className="wr-predicted-races-list">
+                {data.predicted_races.map((pr: WorldRankingPredictedRace) => (
+                  <div key={pr.race_id} className="wr-predicted-race-row">
+                    <span className="wr-predicted-race-name">{pr.race_name ?? `Race ${pr.race_id}`}</span>
+                    <span className="wr-predicted-race-date">{pr.date}</span>
+                    <span className="wr-predicted-race-pts">{pr.points}pt</span>
+                    <span className="wr-predicted-race-based">
+                      前年: {pr.based_on_race_name ?? `Race ${pr.based_on_race_id}`}
+                      <span className="wr-predicted-race-n">（{pr.participants_count}名）</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {data && predictionMode !== 'none' && data.predicted_races.length === 0 && (
+          <div className="wr-predicted-races-empty">
+            ⚠️ 予測対象大会が見つかりませんでした（前年同一大会がDBに存在しない可能性があります）
+          </div>
+        )}
 
         {data && (
           <div className="wr-period-info">
@@ -279,6 +328,7 @@ export default function WorldRanking() {
 
         <p className="desc">
           各期間の上位3大会のポイント合計。優勝ポイントを1位が獲得し、以降は0.925倍ずつ減少。行をクリックで詳細を展開。
+          {hasDiff && <span className="wr-diff-legend"> 矢印は現時点との差分を示します。</span>}
         </p>
 
         {error && <div className="error">{error}</div>}
@@ -290,9 +340,11 @@ export default function WorldRanking() {
               <thead>
                 <tr>
                   <th>順位</th>
+                  {hasDiff && <th className="wr-diff-col">現在</th>}
                   <th>選手名</th>
                   <th>国</th>
-                  <th className="col-total-highlight">合計ポイント</th>
+                  <th className="col-total-highlight">合計pt</th>
+                  {hasDiff && <th className="wr-diff-col">Δpt</th>}
                   <th>Current</th>
                   <th>Previous</th>
                 </tr>
@@ -300,13 +352,20 @@ export default function WorldRanking() {
               <tbody>
                 {data.rankings.length === 0 && (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <td colSpan={hasDiff ? 8 : 6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                       該当期間にポイント設定済みのレース結果がありません
                     </td>
                   </tr>
                 )}
                 {data.rankings.map((entry: WorldRankingEntry, i: number) => {
                   const isExpanded = expandedAthletes.has(entry.athlete_id)
+                  const baseline = baselineMap[entry.athlete_id]
+                  const projRank = i + 1
+                  const baseRank = baseline?.rank
+                  // 順位差: 正 = 順位アップ（元が大きい数字 → 今が小さい数字）
+                  const rankDiff = baseRank !== undefined ? baseRank - projRank : null
+                  const ptsDiff = baseline !== undefined ? entry.total_points - baseline.total_points : null
+
                   return (
                     <>
                       <tr
@@ -314,7 +373,22 @@ export default function WorldRanking() {
                         className="race-row-expandable"
                         onClick={() => toggleExpand(entry.athlete_id)}
                       >
-                        <td className="rank">{i + 1}</td>
+                        <td className="rank">{projRank}</td>
+                        {hasDiff && (
+                          <td className="wr-diff-col">
+                            {baseRank !== undefined ? (
+                              <span className={`wr-rank-diff ${rankDiff === null ? '' : rankDiff > 0 ? 'wr-up' : rankDiff < 0 ? 'wr-down' : 'wr-same'}`}>
+                                {baseRank}
+                                {rankDiff !== null && rankDiff !== 0 && (
+                                  <span className="wr-rank-diff-arrow">
+                                    {rankDiff > 0 ? ` ↑${rankDiff}` : ` ↓${Math.abs(rankDiff)}`}
+                                  </span>
+                                )}
+                                {rankDiff === 0 && <span className="wr-rank-diff-arrow"> →</span>}
+                              </span>
+                            ) : <span className="wr-new-badge">NEW</span>}
+                          </td>
+                        )}
                         <td>
                           <span className="expand-toggle">{isExpanded ? '▼' : '▶'} </span>
                           <Link
@@ -326,6 +400,11 @@ export default function WorldRanking() {
                         </td>
                         <td>{entry.country}</td>
                         <td className="mono time-actual-total">{entry.total_points.toFixed(1)}</td>
+                        {hasDiff && (
+                          <td className={`mono wr-diff-col ${ptsDiff === null ? '' : ptsDiff > 0 ? 'wr-up' : ptsDiff < 0 ? 'wr-down' : 'wr-same'}`}>
+                            {ptsDiff !== null ? fmtDiff(ptsDiff) : '—'}
+                          </td>
+                        )}
                         <td className="mono">{entry.period1_points.toFixed(1)}</td>
                         <td className="mono wr-period2-val">
                           {entry.period2_points.toFixed(1)}
@@ -336,42 +415,18 @@ export default function WorldRanking() {
                       </tr>
                       {isExpanded && (
                         <tr key={`${entry.athlete_id}-detail`} className="segment-detail-row">
-                          <td colSpan={6}>
+                          <td colSpan={hasDiff ? 8 : 6}>
                             <div className="wr-detail">
-                              <div className="wr-detail-col">
-                                <div className="wr-detail-label">直近1年の大会（上位3大会が加算）</div>
-                                {entry.period1_races.length === 0
-                                  ? <p className="wr-no-race">該当なし</p>
-                                  : entry.period1_races.map((r, idx) => (
-                                    <div key={r.race_id} className={`wr-race-row ${idx < 3 ? 'wr-counted' : 'wr-not-counted'}`}>
-                                      <span className="wr-race-date">{r.date}</span>
-                                      <span className="wr-race-name">
-                                        {r.race_name ?? `Race ${r.race_id}`}
-                                        {r.is_future && <span className="wr-future-badge">予測</span>}
-                                      </span>
-                                      <span className="wr-race-pts">{r.points.toFixed(1)}pt</span>
-                                      {idx >= 3 && <span className="wr-not-counted-badge">加算外</span>}
-                                    </div>
-                                  ))
-                                }
-                              </div>
-                              <div className="wr-detail-col">
-                                <div className="wr-detail-label">前年の大会（上位3大会の合計 × 1/3）</div>
-                                {entry.period2_races.length === 0
-                                  ? <p className="wr-no-race">該当なし</p>
-                                  : entry.period2_races.map((r, idx) => (
-                                    <div key={r.race_id} className={`wr-race-row ${idx < 3 ? 'wr-counted' : 'wr-not-counted'}`}>
-                                      <span className="wr-race-date">{r.date}</span>
-                                      <span className="wr-race-name">
-                                        {r.race_name ?? `Race ${r.race_id}`}
-                                        {r.is_future && <span className="wr-future-badge">予測</span>}
-                                      </span>
-                                      <span className="wr-race-pts">{r.points.toFixed(1)}pt</span>
-                                      {idx >= 3 && <span className="wr-not-counted-badge">加算外</span>}
-                                    </div>
-                                  ))
-                                }
-                              </div>
+                              <RaceDetailCol
+                                label="直近1年の大会（上位3大会が加算）"
+                                races={entry.period1_races}
+                                predictedRaceIds={predictedRaceIds}
+                              />
+                              <RaceDetailCol
+                                label="前年の大会（上位3大会の合計 × 1/3）"
+                                races={entry.period2_races}
+                                predictedRaceIds={predictedRaceIds}
+                              />
                             </div>
                           </td>
                         </tr>
@@ -384,6 +439,48 @@ export default function WorldRanking() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function RaceDetailCol({
+  label,
+  races,
+  predictedRaceIds,
+}: {
+  label: string
+  races: import('../api').WorldRankingRace[]
+  predictedRaceIds: Set<number>
+}) {
+  return (
+    <div className="wr-detail-col">
+      <div className="wr-detail-label">{label}</div>
+      {races.length === 0 ? (
+        <p className="wr-no-race">該当なし</p>
+      ) : (
+        races.map((r, idx) => {
+          const isPredicted = predictedRaceIds.has(r.race_id)
+          const isCounted = idx < 3
+          return (
+            <div
+              key={r.race_id}
+              className={[
+                'wr-race-row',
+                isCounted ? 'wr-counted' : 'wr-not-counted',
+                isPredicted ? 'wr-predicted-highlight' : '',
+              ].join(' ')}
+            >
+              <span className="wr-race-date">{r.date}</span>
+              <span className="wr-race-name">
+                {r.race_name ?? `Race ${r.race_id}`}
+                {r.is_future && <span className="wr-future-badge">予測</span>}
+              </span>
+              <span className="wr-race-pts">{r.points.toFixed(1)}pt</span>
+              {!isCounted && <span className="wr-not-counted-badge">加算外</span>}
+            </div>
+          )
+        })
+      )}
     </div>
   )
 }
