@@ -37,6 +37,13 @@ def _detect_points(event_categories: list[str]) -> int | None:
     return None
 
 
+@router.get("/imported-event-ids")
+async def get_imported_event_ids(session: Session = Depends(get_db)):
+    """DBに登録済みの event_id 一覧を返す（フロントエンドがAlgoliaデータと突き合わせるため）"""
+    ids = [r.event_id for r in session.exec(select(Race)).all() if r.event_id is not None]
+    return {"event_ids": ids}
+
+
 @router.get("/para-events")
 async def list_wt_para_events(
     years_back: int = Query(3, ge=1, le=10),
