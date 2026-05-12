@@ -61,3 +61,13 @@ async def evaluate_difficulty(session: Session = Depends(get_db)):
     """
     from app.services.eval_difficulty import evaluate_difficulty_models
     return evaluate_difficulty_models(session)
+
+
+@router.get("/compare_halflife")
+async def compare_halflife(session: Session = Depends(get_db)):
+    """時間減衰の半減期（365/270/180日）別に統合ALS精度を比較する（レースアウト CV）。
+
+    NOTE: 計算に時間がかかります（各半減期につき全レース分の ALS を実行）。
+    """
+    from app.services.eval_difficulty import evaluate_halflife_comparison
+    return evaluate_halflife_comparison(session)

@@ -8,6 +8,44 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 ### 今後のルール
 **コミットのたびに以下のフォーマットで追記する（新しい順）。**
 
+---
+
+## 2026-05-12: ALS精度評価のデータリーク修正・半減期比較API追加
+**コミット:** `f0e42db`
+**ブランチ:** claude/improve-als-accuracy-iY9qX
+
+### 変更内容
+- `app/services/eval_difficulty.py`: ALS評価ロジックを修正（difficulty=0→フルデータALS推定値）
+- `app/services/eval_difficulty.py`: `evaluate_halflife_comparison()` 関数追加（365/270/180日比較）
+- `app/routers/admin.py`: `GET /admin/compare_halflife` エンドポイント追加
+- `frontend/src/pages/Guide.tsx`: 評価UIにモデルの前提条件の違いを説明するノート追加
+- `frontend/src/pages/Guide.css`: ノート用スタイル追加
+- `scripts/compare_halflife.py`: ローカル実験用スクリプト追加
+
+### 変更意図・背景
+精度チェックでsame_cat/cross_catがALSより圧倒的に誤差が少ない状況を分析した結果、
+評価上の根本的な非対称（データリーク）を発見した。
+
+- **旧ALSの評価**: テストレースを除外してdifficultyが推定できないため `difficulty=0` を使用
+- **same_cat/cross_cat**: テストレース当日の実走タイムを使ってdifficultyを計算（情報リーク）
+
+→ 不公平な比較であったため修正。ALSはフルデータのコース難易度を使い「過去の同会場実績から
+  事前推定するシナリオ」として再評価するように変更。
+
+また、時間減衰の半減期パラメータ（現在365日）が精度に与える影響を測定するため、
+API経由で365/270/180日の比較ができるエンドポイントを追加した。
+
+### 技術的決定事項
+- **評価の分割設計**: 選手強さ=hold-out、コース難易度=フルデータ（事前推定シナリオ）
+  これは実用に即した比較：コース難易度は過去の同会場レースから事前に推定できる
+- **半減期比較はAPIとして実装**: DB接続が必要なためスクリプトでは実行できず、
+  `/admin/compare_halflife` エンドポイントとして本番DB上で実行できるように設計
+
+### 残課題・次のステップ
+- `/admin/compare_halflife` を本番サーバーで実行して半減期の結果を確認し、
+  最良の半減期を `als_optimizer.py` の `_HALFLIFE_DAYS` に反映する
+- same_cat/cross_catのリークを前提に「速報補正」用途として明示的に位置づけ直す
+
 ```
 ## YYYY-MM-DD: タイトル
 **コミット:** `hash`
