@@ -281,7 +281,7 @@ export interface WorldRankingEntry {
 export interface WorldRankingResponse {
   program_name: string;
   as_of_date: string;
-  include_predictions: boolean;
+  prediction_mode: string;
   current_start: string;
   current_end: string;
   previous_start: string;
@@ -328,9 +328,10 @@ export async function getUpcomingEvents(daysAhead = 365): Promise<AlgoliaEvent[]
           `start_date_timestamp >= ${nowTs}`,
           `start_date_timestamp <= ${endTs}`,
         ],
+        // World Championships の子要素（Para Championships）は sport_categories が
+        // "Paratriathlon" になる場合があるため OR で両方をカバー
         facetFilters: [
-          ['sport_categories:Triathlon'],
-          ['specification_categories:Paratriathlon'],
+          ['specification_categories:Paratriathlon', 'sport_categories:Paratriathlon'],
         ],
       }],
     }),
@@ -338,7 +339,12 @@ export async function getUpcomingEvents(daysAhead = 365): Promise<AlgoliaEvent[]
   if (!res.ok) throw new Error(`Algolia error: ${res.status}`);
   const data = await res.json();
   const hits: AlgoliaEvent[] = data.results?.[0]?.hits ?? [];
-  return hits.sort((a, b) => a.start_date.localeCompare(b.start_date));
+  return hits
+    .filter((h) => {
+      const s = (h.status ?? '').toUpperCase();
+      return s !== 'CANCELLED' && s !== 'POSTPONED';
+    })
+    .sort((a, b) => a.start_date.localeCompare(b.start_date));
 }
 
 export async function getPastParaEvents(yearsBack = 3): Promise<AlgoliaEvent[]> {
@@ -431,11 +437,19 @@ export const api = {
     form.append('file', file);
     return uploadApi<PredictResponse>('/predict/upload-startlist', form);
   },
-  getWorldRanking: (programName: string, asOfDate: string, includePredictions = false) =>
+  getWorldRanking: (
+    programName: string,
+    asOfDate: string,
+    predictionMode: 'none' | 'all' | 'startlist_only' = 'none',
+    startlistEventIds: string[] = [],
+  ) =>
     fetchApi<WorldRankingResponse>('/world-ranking', {
       program_name: programName,
       as_of_date: asOfDate,
-      include_predictions: String(includePredictions),
+      prediction_mode: predictionMode,
+      ...(startlistEventIds.length > 0
+        ? { startlist_event_ids: startlistEventIds.join(',') }
+        : {}),
     }),
   uploadRaceResult: (params: {
     file: File;
