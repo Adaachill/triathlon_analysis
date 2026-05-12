@@ -1,10 +1,27 @@
 import { useState, useEffect } from 'react'
-import { api } from '../api'
-import type { WtParaEvent } from '../api'
+import { api, getPastParaEvents } from '../api'
+import type { AlgoliaEvent } from '../api'
 import './pages.css'
 import './WtImport.css'
 
 const POINTS_OPTIONS = [700, 550, 500, 450, 350]
+
+// event_categories キーワード → 優勝ポイント（長い順に評価して誤マッチを防ぐ）
+const POINTS_MAP: [string, number][] = [
+  ['world championships', 700],
+  ['world para series', 550],
+  ['continental championships', 500],
+  ['world para cup', 450],
+  ['continental para cup', 350],
+]
+
+function detectPoints(eventCategories: string[]): number | null {
+  const lower = eventCategories.join(' | ').toLowerCase()
+  for (const [kw, pts] of POINTS_MAP) {
+    if (lower.includes(kw)) return pts
+  }
+  return null
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -12,10 +29,11 @@ function sleep(ms: number) {
 
 export default function WtImport() {
   const [yearsBack, setYearsBack] = useState(3)
-  const [events, setEvents] = useState<WtParaEvent[]>([])
+  const [events, setEvents] = useState<AlgoliaEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [bulkRunning, setBulkRunning] = useState(false)
+  const [importedIds, setImportedIds] = useState<Set<string>>(new Set())
 
   // インポート中イベントの状態 id -> 'loading' | 'done:{n}' | 'skipped' | 'error:{msg}'
   const [importState, setImportState] = useState<Record<number, string>>({})
@@ -23,8 +41,12 @@ export default function WtImport() {
   // 編集可能な優勝ポイント id -> number
   const [editedPoints, setEditedPoints] = useState<Record<number, number>>({})
 
-  function getPoints(ev: WtParaEvent): number {
-    return editedPoints[ev.id] ?? ev.win_points ?? 0
+  function getPoints(ev: AlgoliaEvent): number {
+    return editedPoints[ev.id] ?? detectPoints(ev.event_categories) ?? 0
+  }
+
+  function isImported(ev: AlgoliaEvent): boolean {
+    return importedIds.has(String(ev.id))
   }
 
   async function fetchEvents() {
@@ -33,11 +55,16 @@ export default function WtImport() {
     setEvents([])
     setImportState({})
     try {
-      const res = await api.getWtParaEvents(yearsBack)
-      setEvents(res.events)
+      const [evList, idsResp] = await Promise.all([
+        getPastParaEvents(yearsBack),
+        api.getImportedEventIds(),
+      ])
+      setEvents(evList)
+      setImportedIds(new Set(idsResp.event_ids))
       const pts: Record<number, number> = {}
-      for (const ev of res.events) {
-        if (ev.win_points != null) pts[ev.id] = ev.win_points
+      for (const ev of evList) {
+        const p = detectPoints(ev.event_categories)
+        if (p != null) pts[ev.id] = p
       }
       setEditedPoints(pts)
     } catch (e) {
@@ -49,7 +76,7 @@ export default function WtImport() {
 
   useEffect(() => { fetchEvents() }, [])
 
-  async function doImport(ev: WtParaEvent, force = false) {
+  async function doImport(ev: AlgoliaEvent, force = false) {
     const pts = getPoints(ev)
     if (!pts) return
     setImportState((s) => ({ ...s, [ev.id]: 'loading' }))
@@ -66,7 +93,7 @@ export default function WtImport() {
         setImportState((s) => ({ ...s, [ev.id]: 'skipped' }))
       } else {
         setImportState((s) => ({ ...s, [ev.id]: `done:${res.added_results}` }))
-        setEvents((prev) => prev.map((e) => e.id === ev.id ? { ...e, imported: true } : e))
+        setImportedIds((prev) => new Set([...prev, String(ev.id)]))
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : '失敗'
@@ -76,7 +103,7 @@ export default function WtImport() {
 
   async function handleBulkImport() {
     const targets = events.filter(
-      (ev) => ev.win_points != null && !ev.imported && importState[ev.id] == null
+      (ev) => detectPoints(ev.event_categories) != null && !isImported(ev) && importState[ev.id] == null
     )
     if (targets.length === 0) return
     setBulkRunning(true)
@@ -87,10 +114,10 @@ export default function WtImport() {
     setBulkRunning(false)
   }
 
-  const withPoints = events.filter((e) => e.win_points != null)
-  const noPoints = events.filter((e) => e.win_points == null)
+  const withPoints = events.filter((e) => detectPoints(e.event_categories) != null)
+  const noPoints = events.filter((e) => detectPoints(e.event_categories) == null)
   const pendingCount = withPoints.filter(
-    (e) => !e.imported && importState[e.id] == null
+    (e) => !isImported(e) && importState[e.id] == null
   ).length
 
   return (
@@ -99,7 +126,7 @@ export default function WtImport() {
         <h2>World Triathlon 過去大会インポート</h2>
       </div>
       <p className="desc">
-        World Triathlon の Paratriathlon 大会を Algolia から取得し、
+        World Triathlon の Paratriathlon 大会を取得し、
         結果 Excel を自動ダウンロードして DB にインポートします。
         既存レースはスキップします（再インポートは各行の「再取込」ボタンで実行）。
       </p>
@@ -155,14 +182,15 @@ export default function WtImport() {
               <tbody>
                 {events.map((ev) => {
                   const state = importState[ev.id]
+                  const hasPoints = detectPoints(ev.event_categories) != null
                   const pts = getPoints(ev)
                   const isLoading = state === 'loading'
-                  const isSkipped = state === 'skipped' || (ev.imported && state == null)
+                  const isSkipped = state === 'skipped' || (isImported(ev) && state == null)
                   const isDone = state?.startsWith('done')
                   const isError = state?.startsWith('error')
                   const addedCount = state?.startsWith('done:') ? state.slice(5) : null
                   return (
-                    <tr key={ev.id} className={ev.win_points == null ? 'wti-row-nopoints' : ''}>
+                    <tr key={ev.id} className={!hasPoints ? 'wti-row-nopoints' : ''}>
                       <td>
                         <span className="wti-event-name">{ev.name}</span>
                       </td>
@@ -178,7 +206,7 @@ export default function WtImport() {
                         </div>
                       </td>
                       <td>
-                        {ev.win_points != null ? (
+                        {hasPoints ? (
                           <select
                             value={pts}
                             onChange={(e) =>
@@ -196,15 +224,11 @@ export default function WtImport() {
                       </td>
                       <td>
                         {isDone ? (
-                          <span className="wti-status wti-status-done">
-                            ✓ {addedCount}件追加
-                          </span>
+                          <span className="wti-status wti-status-done">✓ {addedCount}件追加</span>
                         ) : isSkipped ? (
                           <span className="wti-status wti-status-skipped">済（スキップ）</span>
                         ) : isError ? (
-                          <span className="wti-status wti-status-error" title={state?.slice(6)}>
-                            ✗ エラー
-                          </span>
+                          <span className="wti-status wti-status-error" title={state?.slice(6)}>✗ エラー</span>
                         ) : isLoading ? (
                           <span className="wti-status wti-status-loading">取込中...</span>
                         ) : (
@@ -212,7 +236,7 @@ export default function WtImport() {
                         )}
                       </td>
                       <td className="wti-actions">
-                        {ev.win_points != null && !isLoading && !isDone && !isSkipped && (
+                        {hasPoints && !isLoading && !isDone && !isSkipped && (
                           <button
                             className="wti-import-btn"
                             onClick={() => doImport(ev)}
@@ -221,7 +245,7 @@ export default function WtImport() {
                             インポート
                           </button>
                         )}
-                        {ev.win_points != null && (isDone || isSkipped) && (
+                        {hasPoints && (isDone || isSkipped) && (
                           <button
                             className="wti-import-btn wti-reimport-btn"
                             onClick={() => doImport(ev, true)}
@@ -241,7 +265,7 @@ export default function WtImport() {
 
           {noPoints.length > 0 && (
             <p className="wti-nopoints-note">
-              ※ ポイントなしの {noPoints.length} 件（ポイント対象外カテゴリ）はグレー表示です。必要に応じてインポートしてください。
+              ※ ポイントなしの {noPoints.length} 件（ポイント対象外カテゴリ）はグレー表示です。
             </p>
           )}
         </>

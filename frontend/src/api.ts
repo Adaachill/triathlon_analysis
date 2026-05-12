@@ -304,6 +304,7 @@ export interface AlgoliaEvent {
   status: string;
   sport_categories: string[];
   specification_categories: string[];
+  event_categories: string[];
   startlist_available: boolean;
   results_available: boolean;
 }
@@ -338,6 +339,39 @@ export async function getUpcomingEvents(daysAhead = 365): Promise<AlgoliaEvent[]
   const data = await res.json();
   const hits: AlgoliaEvent[] = data.results?.[0]?.hits ?? [];
   return hits.sort((a, b) => a.start_date.localeCompare(b.start_date));
+}
+
+export async function getPastParaEvents(yearsBack = 3): Promise<AlgoliaEvent[]> {
+  const nowTs = Math.floor(Date.now() / 1000);
+  const startTs = nowTs - yearsBack * 365 * 86400;
+  const url =
+    `https://${WT_ALGOLIA_APP_ID.toLowerCase()}-dsn.algolia.net/1/indexes/*/queries` +
+    `?x-algolia-api-key=${WT_ALGOLIA_API_KEY}&x-algolia-application-id=${WT_ALGOLIA_APP_ID}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{
+        indexName: WT_ALGOLIA_INDEX,
+        query: '',
+        page: 0,
+        hitsPerPage: 200,
+        numericFilters: [
+          `start_date_timestamp >= ${startTs}`,
+          `start_date_timestamp <= ${nowTs}`,
+        ],
+        facetFilters: [
+          ['sport_categories:Triathlon'],
+          ['specification_categories:Paratriathlon'],
+          ['results_available:true'],
+        ],
+      }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Algolia error: ${res.status}`);
+  const data = await res.json();
+  const hits: AlgoliaEvent[] = data.results?.[0]?.hits ?? [];
+  return hits.sort((a, b) => b.start_date.localeCompare(a.start_date));
 }
 
 export interface WtParaEvent {
@@ -419,8 +453,8 @@ export const api = {
       form,
     );
   },
-  getWtParaEvents: (yearsBack = 3) =>
-    fetchApi<WtParaEventsResponse>('/admin/wt/para-events', { years_back: String(yearsBack) }),
+  getImportedEventIds: () =>
+    fetchApi<{ event_ids: string[] }>('/admin/wt/imported-event-ids'),
   importWtEvent: (params: {
     id: number;
     win_points: number;
