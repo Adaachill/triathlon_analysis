@@ -208,6 +208,16 @@ export default function WorldRanking() {
     return groups
   }, [upcomingEvents])
 
+  // 未来日付が選択された場合、その日までの期間内に開催される大会を表示
+  const eventsInRange = useMemo(() => {
+    if (asOfDate <= todayStr() || !selectedEvent) return []
+    const future = new Date(asOfDate)
+    return upcomingEvents.filter((ev) => {
+      const eventDate = new Date(ev.start_date)
+      return eventDate <= future
+    })
+  }, [asOfDate, selectedEvent, upcomingEvents])
+
   return (
     <div className="wr-page">
       <div className="wr-dev-banner">
@@ -278,6 +288,26 @@ export default function WorldRanking() {
           )}
         </div>
 
+        {/* 期間内の大会リスト（未来日付選択時） */}
+        {dateMode === 'from_race' && selectedEvent && eventsInRange.length > 0 && (
+          <div className="wr-events-in-range-section">
+            <div className="wr-events-in-range-label">
+              期間内の大会: {asOfDate}まで ({eventsInRange.length}件)
+            </div>
+            <div className="wr-events-in-range-list">
+              {eventsInRange.map((ev) => (
+                <div key={ev.id} className={`wr-event-row ${ev.startlist_available ? 'wr-event-startlist' : 'wr-event-no-startlist'}`}>
+                  <span className={`wr-event-sl-badge ${ev.startlist_available ? 'wr-badge-available' : 'wr-badge-unavailable'}`}>
+                    {ev.startlist_available ? 'SL公開済' : 'SL未公開'}
+                  </span>
+                  <span className="wr-event-row-name">{ev.name}</span>
+                  <span className="wr-event-row-date">{ev.start_date}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {isFutureDate && (
           <div className="wr-future-notice">
             📅 基準日が未来（{asOfDate}）のため、その日までに開催済みのレース結果を使って試算しています。
@@ -302,12 +332,21 @@ export default function WorldRanking() {
                 {startlistEventIds.length > 0 && <span className="wr-startlist-count">（{startlistEventIds.length}大会）</span>}
               </span>
             </label>
+            <label className="wr-prediction-option">
+              <input type="radio" name="predictionMode" value="startlist" checked={predictionMode === 'startlist'} onChange={() => setPredictionMode('startlist')} />
+              <span>スタートリスト（アップロード済み）で予測</span>
+            </label>
           </div>
-          {predictionMode !== 'none' && (
+          {predictionMode === 'startlist' && (
+            <p className="wr-predictions-note">
+              ※ Startlist テーブルにアップロード済みの参加者リストを使用し、<strong>強さランク順</strong>で予測順位を決定します。
+            </p>
+          )}
+          {predictionMode === 'startlist_only' || predictionMode === 'previous_year' ? (
             <p className="wr-predictions-note">
               ※ 前年の同一大会（年号以外のレース名が一致）の参加者リストを使用し、<strong>強さランク順</strong>で予測順位を決定します。前年大会がない場合はスキップ。
             </p>
-          )}
+          ) : null}
         </div>
 
         {/* 予測対象大会の一覧 */}
