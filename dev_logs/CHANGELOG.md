@@ -11,7 +11,7 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 ---
 
 ## 2026-05-12: WtImportページの自動Algoliaクロール停止
-**コミット:** `（コミット後に記載）`
+**コミット:** `58e18d6`
 **ブランチ:** claude/wt-import-no-auto-fetch-k3mP
 
 ### 変更内容
