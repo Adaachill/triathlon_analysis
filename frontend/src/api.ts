@@ -289,6 +289,7 @@ export interface WorldRankingPredictedRace {
   based_on_race_id: number;
   based_on_race_name: string | null;
   participants_count: number;
+  is_startlist: boolean;
 }
 
 export interface WorldRankingResponse {

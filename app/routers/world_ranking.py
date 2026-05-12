@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query, Depends
 from sqlmodel import Session, select
 from app.deps import get_db
 from app.models import Race, Result
+from app.services.als_optimizer import get_optimized_program
 
 router = APIRouter(prefix="/world-ranking", tags=["world-ranking"])
 
@@ -131,6 +132,7 @@ def _compute_rankings(
             race_obj_map=race_obj_map,
             athlete_race_points=athlete_race_points,
             athlete_info=athlete_info,
+            startlist_ids=startlist_ids,
         )
 
     # ランキング計算
@@ -210,8 +212,20 @@ def _apply_prediction_from_prev_year(
     race_obj_map: dict[int, Race],
     athlete_race_points: dict[str, dict[int, float]],
     athlete_info: dict[str, dict],
+    startlist_ids: set[str],
 ) -> list[dict]:
-    """前年同一大会の参加者を使って予測ポイントを計算。predicted_races リストを返す"""
+    """前年同一大会の参加者リストを取得し、強さランク順で順位を決定して予測ポイントを計算。"""
+    # 強さランクを事前取得（強さが小さいほど速い）
+    try:
+        opt = get_optimized_program(session, program_name)
+        strength_map: dict[str, float] = {
+            aid: s["strength"]
+            for aid, s in opt.get("athlete_strengths", {}).items()
+            if s.get("strength") is not None
+        }
+    except Exception:
+        strength_map = {}
+
     predicted_races: list[dict] = []
 
     for race_id in future_race_ids:
@@ -235,12 +249,19 @@ def _apply_prediction_from_prev_year(
         if not prev_results:
             continue
 
+        # 前年参加者を強さランクでソートして予測順位を決定
+        # 強さデータがない選手は後ろに回す
+        sorted_results = sorted(
+            prev_results,
+            key=lambda x: strength_map.get(x.athlete_id, float("inf")),
+        )
+
         win_pts = ri["points"]
+        is_startlist = bool(ri["event_id"] and ri["event_id"] in startlist_ids)
         added_count = 0
-        for result in sorted(prev_results, key=lambda x: x.position or 9999):
-            if result.position is None:
-                continue
-            earned = _calc_position_points(win_pts, result.position)
+
+        for position, result in enumerate(sorted_results, 1):
+            earned = _calc_position_points(win_pts, position)
             # 実績がある場合は上書きしない
             if race_id not in athlete_race_points.get(result.athlete_id, {}):
                 athlete_race_points.setdefault(result.athlete_id, {})[race_id] = earned
@@ -262,6 +283,7 @@ def _apply_prediction_from_prev_year(
                     "based_on_race_id": prev_race.id,
                     "based_on_race_name": prev_race.name,
                     "participants_count": added_count,
+                    "is_startlist": is_startlist,
                 }
             )
 
