@@ -365,3 +365,243 @@
   margin-left: 0.3rem;
   letter-spacing: 0.03em;
 }
+
+/* 予測対象大会セクション */
+.wr-predicted-races-section {
+  margin: 0.5rem 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.wr-predicted-races-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  background: var(--bg-hover);
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+}
+
+.wr-predicted-races-toggle:hover {
+  background: var(--border);
+}
+
+.wr-predicted-races-list {
+  padding: 0.25rem 0;
+}
+
+.wr-predicted-race-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.75rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.83rem;
+  border-top: 1px solid var(--border);
+}
+
+.wr-predicted-race-name {
+  font-weight: 600;
+  color: var(--text);
+  flex: 1 1 200px;
+}
+
+.wr-predicted-race-date {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.wr-predicted-race-pts {
+  font-family: var(--font-mono, monospace);
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.wr-predicted-race-based {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  flex: 1 1 200px;
+}
+
+.wr-predicted-race-n {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.wr-predicted-races-empty {
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  margin: 0.4rem 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-hover);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+/* 差分カラム */
+.wr-diff-col {
+  white-space: nowrap;
+}
+
+.wr-rank-diff {
+  font-size: 0.82rem;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-muted);
+}
+
+.wr-rank-diff-arrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-left: 0.15rem;
+}
+
+.wr-up .wr-rank-diff-arrow,
+td.wr-up {
+  color: #15803d;
+}
+
+.wr-down .wr-rank-diff-arrow,
+td.wr-down {
+  color: #dc2626;
+}
+
+.wr-same .wr-rank-diff-arrow,
+td.wr-same {
+  color: var(--text-muted);
+}
+
+.wr-new-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  background: rgba(147, 51, 234, 0.12);
+  color: #7c3aed;
+  border: 1px solid rgba(147, 51, 234, 0.25);
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.wr-diff-legend {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-left: 0.5rem;
+}
+
+/* ===== 大会変化ハイライト（フラグ別カラー） ===== */
+/* 共通 */
+.wr-hl-predicted,
+.wr-hl-startlist,
+.wr-hl-moved,
+.wr-hl-new,
+.wr-hl-counted,
+.wr-hl-uncounted {
+  border-left: 3px solid transparent;
+  padding-left: calc(0.4rem - 3px);
+}
+
+/* 前年参加者予測（黄） */
+.wr-hl-predicted {
+  background: rgba(234, 179, 8, 0.07);
+  border-left-color: rgba(234, 179, 8, 0.55);
+}
+
+/* スタートリスト予測（緑） */
+.wr-hl-startlist {
+  background: rgba(34, 197, 94, 0.07);
+  border-left-color: rgba(34, 197, 94, 0.55);
+}
+
+/* Current→Previous 移動（青） */
+.wr-hl-moved {
+  background: rgba(59, 130, 246, 0.07);
+  border-left-color: rgba(59, 130, 246, 0.55);
+}
+
+/* 新規追加（水色） */
+.wr-hl-new {
+  background: rgba(6, 182, 212, 0.07);
+  border-left-color: rgba(6, 182, 212, 0.55);
+}
+
+/* 上位3に新規入り（ライム） */
+.wr-hl-counted {
+  background: rgba(132, 204, 22, 0.08);
+  border-left-color: rgba(132, 204, 22, 0.6);
+}
+
+/* 上位3から外れた（オレンジ） */
+.wr-hl-uncounted {
+  background: rgba(249, 115, 22, 0.07);
+  border-left-color: rgba(249, 115, 22, 0.55);
+}
+
+/* 変化バッジ（wr-race-row 内のタグ） */
+.wr-change-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.08rem 0.35rem;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+  margin-left: 0.25rem;
+  white-space: nowrap;
+}
+
+.wr-change-badge.wr-hl-predicted  { background: rgba(234,179,8,0.18); color: #92400e; border: 1px solid rgba(234,179,8,0.4); }
+.wr-change-badge.wr-hl-startlist  { background: rgba(34,197,94,0.15); color: #15803d; border: 1px solid rgba(34,197,94,0.35); }
+.wr-change-badge.wr-hl-moved      { background: rgba(59,130,246,0.14); color: #1d4ed8; border: 1px solid rgba(59,130,246,0.35); }
+.wr-change-badge.wr-hl-new        { background: rgba(6,182,212,0.14); color: #0e7490; border: 1px solid rgba(6,182,212,0.35); }
+.wr-change-badge.wr-hl-counted    { background: rgba(132,204,22,0.15); color: #3f6212; border: 1px solid rgba(132,204,22,0.4); }
+.wr-change-badge.wr-hl-uncounted  { background: rgba(249,115,22,0.14); color: #c2410c; border: 1px solid rgba(249,115,22,0.35); }
+
+/* 予測対象大会リストのバッジ */
+.wr-predicted-race-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.wr-badge-prev { background: rgba(234,179,8,0.18); color: #92400e; border: 1px solid rgba(234,179,8,0.4); }
+.wr-badge-sl   { background: rgba(34,197,94,0.15); color: #15803d; border: 1px solid rgba(34,197,94,0.35); }
+
+/* スタートリストあり大会の行を微妙に区別 */
+.wr-predicted-race-sl { background: rgba(34,197,94,0.04); }
+
+/* ハイライト凡例 */
+.wr-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+
+.wr-legend-title {
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: 0.25rem;
+}
+
+.wr-legend-item {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-left-width: 3px;
+  border-left-style: solid;
+}
