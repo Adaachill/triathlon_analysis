@@ -10,6 +10,29 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-12: スタートリストアップロード不具合修正（未インポート大会対応）
+**コミット:** `d527ed2`
+**ブランチ:** claude/fix-startlist-upload-issue-DUb7G
+
+### 変更内容
+- `app/routers/predict.py`: スタートリストアップロード時、DBにRaceレコードが存在しない場合に自動作成するロジックを追加。`event_date`パラメータを新規追加。
+- `frontend/src/api.ts`: `uploadStartlist()`に`eventDate`パラメータを追加し、クエリパラメータとして送信するよう変更
+- `frontend/src/pages/WorldRanking.tsx`: SLアップロード時にAlgoliaイベントの`start_date`を`event_date`としてAPIに渡すよう修正
+
+### 変更意図・背景
+ワールドランキング予測で未来大会のスタートリストをアップロードしても、「スタートリストが登録された大会がありません」バナーが表示されて予測が機能しなかった。原因は、Algoliaから取得した未来大会はDBのRaceテーブルに存在しないため、スタートリストデータが保存されないままになっていたこと。
+
+### 技術的決定事項
+- アップロード時にRaceレコードが存在しない場合、event_idとevent_dateから仮のRaceを自動作成する
+- ポイント（points）はデフォルト500を設定（ランキング計算に寄与させるため）
+- フロントエンドからevent_dateを渡すことで、作成されるRaceレコードに正確な開催日を設定可能にした
+
+### 残課題・次のステップ
+- 自動作成されたRaceのpointsはデフォルト500（実際の大会カテゴリに基づき手動調整が必要な場合あり）
+- アップロード成功後に自動的にランキング再計算するとUXが向上する
+
+---
+
 ## 2026-05-12: Paratriathlon大会フィルタ修正・World Championships含める
 **コミット:** `77e9cf1`
 **ブランチ:** claude/fix-paratriathlon-filter-2BThk
