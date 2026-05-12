@@ -51,6 +51,9 @@ function App() {
       <NavLink to="/admin/wt-import" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
         WT大会インポート
       </NavLink>
+      <NavLink to="/admin/wt-import" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+        WT大会インポート
+      </NavLink>
       <NavLink to="/world-ranking" className={({ isActive }) => isActive ? 'nav-link nav-link-dev active' : 'nav-link nav-link-dev'}>
         🌍 世界ランク試算
       </NavLink>

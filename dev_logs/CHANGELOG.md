@@ -66,6 +66,40 @@ API経由で365/270/180日の比較ができるエンドポイントを追加し
 
 ---
 
+## 2026-05-12: 世界ランキング試算ブラッシュアップ（予測モード・大会フィルタ）
+**コミット:** `（コミット後に記載）`
+**ブランチ:** claude/world-ranking-future-dates-WIZhK
+
+### 変更内容
+- `frontend/src/api.ts`: `getUpcomingEvents()` でCANCELLED/POSTPONED大会をフィルタアウト
+- `frontend/src/api.ts`: AlgoliaクエリのfacetFiltersを修正し、World Championships配下のParatriathlonイベント（子要素）もカバー
+- `frontend/src/api.ts`: `WorldRankingResponse.include_predictions` を `prediction_mode` に変更
+- `frontend/src/api.ts`: `api.getWorldRanking()` のシグネチャを `predictionMode` / `startlistEventIds` に更新
+- `app/routers/world_ranking.py`: `include_predictions: bool` → `prediction_mode: str`（none/all/startlist_only）に変更
+- `app/routers/world_ranking.py`: 未来レース予測ロジックを実装（強さランク上位30名を予測参加者とし、強さ順を予測順位として使用）
+- `app/routers/world_ranking.py`: `startlist_event_ids` パラメータを追加（startlist_only モード用）
+- `frontend/src/pages/WorldRanking.tsx`: 「準備中」チェックボックスを3段階ラジオボタン（予測なし/スタートリストあり大会のみ/全大会）に置き換え
+- `frontend/src/pages/WorldRanking.css`: 予測モード選択のスタイル更新
+
+### 変更意図・背景
+- CANCELLED/POSTEPONEDな大会が大会選択ドロップダウンに表示されていたため、誤選択を防ぐ
+- World Triathlon Championship Finals等の親イベントの中にある「Para Championships」子イベントが従来のfacetFiltersでキャッチできていなかった（sport_categories が Paratriathlon になる場合がある）
+- 「未来レース予測」機能が「準備中」のままで実際に動作しなかったため、強さランクベースの予測を実装
+- スタートリストが公開済みの大会のみに絞り込むオプションを追加
+
+### 技術的決定事項
+- 予測ロジック: `get_optimized_program()` で取得した強さ（strength値が小さいほど速い）の上位30名を仮想出場者とし、強さ順を予測順位として `_calc_position_points()` でポイントを計算
+- 実績がある選手の実績結果は上書きしない（将来実績が予測より優先される）
+- `startlist_only` モード: フロントエンドがAlgoliaから取得したスタートリスト公開済みイベントのIDをバックエンドに渡し、`Race.event_id` と照合。DBにないAlgolia IDは無視される
+- Algoliaクエリ: `specification_categories:Paratriathlon OR sport_categories:Paratriathlon` の1段階フィルタに変更（World Champs子要素が `sport_categories:Paratriathlon` を持つ可能性に対応）
+
+### 残課題・次のステップ
+- 実際のスタートリスト（選手名）をWT APIから取得して予測に使う機能（現状は強さランク全員が出場という仮定）
+- DBにない未来レース（まだインポートされていないWT大会）への対応
+- 予測の精度評価
+
+---
+
 ## 過去の履歴（git log より）
 
 ### 2026-05-11: GitHubへの公開・デプロイ設計確定

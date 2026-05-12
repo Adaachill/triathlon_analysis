@@ -6,6 +6,7 @@ import './pages.css'
 import './WorldRanking.css'
 
 type DateMode = 'direct' | 'from_race'
+type PredictionMode = 'none' | 'all' | 'startlist_only'
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
@@ -30,7 +31,7 @@ export default function WorldRanking() {
   const [eventsLoading, setEventsLoading] = useState(false)
   const [eventsError, setEventsError] = useState<string | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null)
-  const [includePredictions, setIncludePredictions] = useState(false)
+  const [predictionMode, setPredictionMode] = useState<PredictionMode>('none')
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getWorldRanking>> | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -66,15 +67,27 @@ export default function WorldRanking() {
     return directDate
   }, [dateMode, selectedEvent, directDate])
 
+  // startlist_only モード用: スタートリスト公開済みのイベントIDを収集
+  const startlistEventIds = useMemo(() => {
+    return upcomingEvents
+      .filter((ev) => ev.startlist_available)
+      .map((ev) => String(ev.id))
+  }, [upcomingEvents])
+
   useEffect(() => {
     if (!program || !asOfDate) return
     setLoading(true)
     setError(null)
-    api.getWorldRanking(program, asOfDate, includePredictions)
+    api.getWorldRanking(
+      program,
+      asOfDate,
+      predictionMode,
+      predictionMode === 'startlist_only' ? startlistEventIds : [],
+    )
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [program, asOfDate, includePredictions])
+  }, [program, asOfDate, predictionMode, startlistEventIds])
 
   const toggleExpand = (athleteId: string) => {
     setExpandedAthletes((prev) => {
@@ -205,21 +218,50 @@ export default function WorldRanking() {
         )}
 
         <div className="wr-predictions-row">
-          <label className="wr-predictions-label">
-            <span className="wr-predictions-toggle-wrap">
+          <label className="wr-label">未来レースの予測</label>
+          <div className="wr-prediction-mode-group">
+            <label className="wr-prediction-option">
               <input
-                type="checkbox"
-                checked={includePredictions}
-                onChange={(e) => setIncludePredictions(e.target.checked)}
-                className="wr-predictions-checkbox"
+                type="radio"
+                name="predictionMode"
+                value="none"
+                checked={predictionMode === 'none'}
+                onChange={() => setPredictionMode('none')}
               />
-              <span className="wr-predictions-text">未開催レースの予測結果を含める</span>
-            </span>
-            <span className="wr-coming-soon-badge">準備中</span>
-          </label>
-          {includePredictions && (
+              <span>予測なし（実績のみ）</span>
+            </label>
+            <label className="wr-prediction-option">
+              <input
+                type="radio"
+                name="predictionMode"
+                value="startlist_only"
+                checked={predictionMode === 'startlist_only'}
+                onChange={() => setPredictionMode('startlist_only')}
+              />
+              <span>
+                スタートリストあり大会のみ予測
+                {startlistEventIds.length > 0 && (
+                  <span className="wr-startlist-count">（{startlistEventIds.length}大会）</span>
+                )}
+              </span>
+            </label>
+            <label className="wr-prediction-option">
+              <input
+                type="radio"
+                name="predictionMode"
+                value="all"
+                checked={predictionMode === 'all'}
+                onChange={() => setPredictionMode('all')}
+              />
+              <span>全未来大会を予測</span>
+            </label>
+          </div>
+          {predictionMode !== 'none' && (
             <p className="wr-predictions-note">
-              ※ スタートリストが発表済みの未来のレースについて、予測順位に基づくポイントを試算に含めます。この機能は現在開発中です。
+              ※ 予測は過去の強さランキング（上位{30}名）を元にした順位推定です。実際の出場者・結果と異なる場合があります。
+              {predictionMode === 'startlist_only' && (
+                <> スタートリスト公開済み大会のAlgolia IDをバックエンドに渡して絞り込みます（DBのevent_idと一致する大会のみ反映されます）。</>
+              )}
             </p>
           )}
         </div>
