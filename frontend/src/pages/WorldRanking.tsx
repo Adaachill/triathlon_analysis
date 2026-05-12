@@ -332,12 +332,21 @@ export default function WorldRanking() {
                 {startlistEventIds.length > 0 && <span className="wr-startlist-count">（{startlistEventIds.length}大会）</span>}
               </span>
             </label>
+            <label className="wr-prediction-option">
+              <input type="radio" name="predictionMode" value="startlist" checked={predictionMode === 'startlist'} onChange={() => setPredictionMode('startlist')} />
+              <span>スタートリスト（アップロード済み）で予測</span>
+            </label>
           </div>
-          {predictionMode !== 'none' && (
+          {predictionMode === 'startlist' && (
+            <p className="wr-predictions-note">
+              ※ Startlist テーブルにアップロード済みの参加者リストを使用し、<strong>強さランク順</strong>で予測順位を決定します。
+            </p>
+          )}
+          {predictionMode === 'startlist_only' || predictionMode === 'previous_year' ? (
             <p className="wr-predictions-note">
               ※ 前年の同一大会（年号以外のレース名が一致）の参加者リストを使用し、<strong>強さランク順</strong>で予測順位を決定します。前年大会がない場合はスキップ。
             </p>
-          )}
+          ) : null}
         </div>
 
         {/* 予測対象大会の一覧 */}

@@ -36,3 +36,17 @@ class Result(SQLModel, table=True):
 
     position: int | None = Field(default=None, index=True)
     status: str = Field(index=True)
+
+class Startlist(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+
+    race_id: int | None = Field(foreign_key="race.id", index=True, default=None)
+    event_id: str = Field(index=True)
+
+    athlete_id: str = Field(index=True)
+    first_name: str
+    last_name: str
+    country: str
+
+    program_name: str = Field(index=True)
+    start_number: int | None = Field(default=None)

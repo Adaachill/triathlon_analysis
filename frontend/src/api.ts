@@ -257,7 +257,7 @@ export interface PredictResponse {
   devonport_difficulties: Record<string, Record<string, number | null>>;
 }
 
-export type PredictionMode = 'none' | 'previous_year' | 'startlist_only'
+export type PredictionMode = 'none' | 'previous_year' | 'startlist_only' | 'startlist'
 
 export interface WorldRankingRace {
   race_id: number;

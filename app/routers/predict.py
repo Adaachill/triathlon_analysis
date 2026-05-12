@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlmodel import Session, select
 
 from app.deps import get_db
-from app.models import Race
+from app.models import Race, Startlist
 from app.services.als_optimizer import get_optimized_program
 
 router = APIRouter(prefix="/predict", tags=["predict"])
@@ -161,11 +161,13 @@ def _compute_predictions(startlist: list[dict], session: Session) -> dict:
 @router.post("/upload-startlist")
 async def upload_startlist(
     file: UploadFile = File(...),
+    race_id: int | None = None,
+    event_id: str | None = None,
     session: Session = Depends(get_db),
 ):
     """
     スタートリスト Excel をアップロードして予想タイム・順位を返す。
-    ファイルはメモリ上でのみ処理し、サーバーには保存しない。
+    race_id/event_id が指定される場合は、Startlist テーブルに保存する。
 
     対応カラム: "Member ID"（または "Athlete ID"）, "First Name", "Last Name",
                "Country", "Program Name", "Start Number"
@@ -184,6 +186,41 @@ async def upload_startlist(
             status_code=422,
             detail="競技カテゴリの選手が見つかりません。ファイル形式を確認してください。",
         )
+
+    # race_id / event_id 指定時は Startlist テーブルに保存
+    if race_id or event_id:
+        race = None
+        if race_id:
+            race = session.exec(select(Race).where(Race.id == race_id)).first()
+        elif event_id:
+            race = session.exec(select(Race).where(Race.event_id == event_id)).first()
+
+        if race:
+            # 既存データ削除（同じレース・イベントの古いスタートリストを上書き）
+            session.exec(
+                select(Startlist).where(
+                    (Startlist.race_id == race.id) | (Startlist.event_id == race.event_id)
+                )
+            )
+            for old in session.exec(
+                select(Startlist).where(Startlist.event_id == race.event_id)
+            ).all():
+                session.delete(old)
+
+            # 新規データ挿入
+            for athlete_data in startlist:
+                sl = Startlist(
+                    race_id=race.id,
+                    event_id=race.event_id,
+                    athlete_id=athlete_data["athlete_id"],
+                    first_name=athlete_data["first_name"],
+                    last_name=athlete_data["last_name"],
+                    country=athlete_data["country"],
+                    program_name=athlete_data["program_name"],
+                    start_number=athlete_data.get("start_number"),
+                )
+                session.add(sl)
+            session.commit()
 
     result = _compute_predictions(startlist, session)
     result["source_label"] = f"アップロード: {file.filename}"
