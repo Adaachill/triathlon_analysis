@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import date
 from fastapi import APIRouter, Query, Depends
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, select, col
 from app.deps import get_db
 from app.models import Race, Result
 from app.services.als_optimizer import get_optimized_program
@@ -23,9 +23,16 @@ class RaceUpdate(BaseModel):
 
 
 @router.get("")
-async def list_races(session: Session = Depends(get_db)):
-    """レース一覧を取得"""
-    races = session.exec(select(Race)).all()
+async def list_races(
+    include_future: bool = Query(default=False, description="未来のレースを含める"),
+    session: Session = Depends(get_db),
+):
+    """レース一覧を取得。デフォルトでは今日以前のレースのみ返す。"""
+    q = select(Race)
+    if not include_future:
+        today = date.today()
+        q = q.where(col(Race.date).is_(None) | (Race.date <= today))
+    races = session.exec(q).all()
     return [{
         "id": r.id,
         "event_id": r.event_id,
