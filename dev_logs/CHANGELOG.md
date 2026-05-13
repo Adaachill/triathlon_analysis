@@ -10,6 +10,34 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-13: 予想リザルト画面にD3.jsバンプチャートを実装
+**コミット:** `TBD`
+**ブランチ:** claude/improve-results-visualization-7fC6Y
+
+### 変更内容
+- `frontend/src/pages/BumpChart.tsx`: 新規作成。D3.jsによる順位変動バンプチャート
+- `frontend/src/pages/Predict.tsx`: 展開トグル行（コース難易度補正）削除、BumpChart追加
+- `frontend/src/pages/pages.css`: バンプチャート用スタイル追加
+- `frontend/package.json`: d3 / @types/d3 追加
+
+### 変更意図・背景
+予想リザルト画面で各セグメント通過時点の順位変動を視覚的に把握できるようにした。
+従来の展開トグル（コース補正列）はコース難易度を使っていないため削除し、バンプチャートに置き換えた。
+
+### 技術的決定事項
+- X軸: 各チェックポイントの中央値累積タイムで位置を決定し、セグメント長の比率を保持
+- Y軸: 順位（1位が上）
+- アニメーション: stroke-dasharray / stroke-dashoffset + d3.transition で左→右に描画
+- ホバー: dot上のmousemoveイベントで前後選手とのギャップを表示
+- クリック（ラインまたは凡例）: モーダルで区間タイム・累積タイム・順位を一覧表示
+- 色: 20色のパレットから自動割り当て、凡例自動生成
+
+### 残課題・次のステップ
+- ウィンドウリサイズ時の自動再描画（ResizeObserver）
+- 選手が多い場合（20人超）の色の視認性改善
+
+---
+
 ## 2026-05-13: 精度チェック・半減期比較の大幅高速化
 **コミット:** `TBD`
 **ブランチ:** claude/speedup-eval-accuracy-xK3m
