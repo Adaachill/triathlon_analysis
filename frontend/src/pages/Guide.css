@@ -190,6 +190,30 @@
   line-height: 1.6;
 }
 
+.guide-eval-filters {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0;
+}
+
+.guide-eval-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #444);
+}
+
+.guide-eval-filter-item select {
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
 .guide-eval-note {
   background: var(--bg-hover, #f0f4ff);
   border-left: 3px solid var(--accent);

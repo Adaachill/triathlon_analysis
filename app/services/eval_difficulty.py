@@ -22,10 +22,18 @@
     - コース難易度（difficulty）: フルデータの ALS 推定値を使用
       → 実運用では「過去の同会場レース」から難易度を事前推定するシナリオに対応
       → difficulty=0（旧評価）より現実的な比較になる
+
+パフォーマンス最適化（v3）:
+  - フルデータ ALS をループ外で1回だけ計算（以前はループ内で R回計算していたバグ）
+  - since_date: 評価対象を直近 N 年に絞れる（デフォルト None = 全期間）
+  - min_athlete_races: 疎な選手を除外（デフォルト 1 = 除外なし）
+  - halflife比較: sample_ratio でレースをサブサンプリングして高速化
 """
 from __future__ import annotations
 
 import math
+import random
+from datetime import date as date_type, timedelta
 from typing import Any
 from sqlmodel import Session, select
 
@@ -40,14 +48,19 @@ from app.services.als_optimizer import (
     _field_to_strength_key,
 )
 
-# 旧プログラム別 ALS（als_optimizer v1 相当）を内部で再実装
+
+# ── 旧プログラム別 ALS（als_optimizer v1 相当、比較用） ────────────────────────
+
 def _compute_old_als_program(
     session: Session,
     program_name: str,
     outlier_k: float = 2.5,
     min_weight: float = 0.1,
     max_iter: int = 30,
+    tol: float = 0.5,
     exclude_race_ids: set[int] | None = None,
+    since_date: date_type | None = None,
+    min_athlete_races: int = 1,
 ) -> dict:
     """旧来のプログラム単独 ALS（比較用）。"""
     results = session.exec(
@@ -59,6 +72,18 @@ def _compute_old_als_program(
     ).all()
     if exclude_race_ids:
         results = [r for r in results if r.race_id not in exclude_race_ids]
+
+    # since_date フィルタ
+    if since_date is not None:
+        race_ids_set_all = {r.race_id for r in results}
+        race_objs = session.exec(select(Race).where(Race.id.in_(list(race_ids_set_all)))).all()
+        race_dates_map = {r.id: r.date for r in race_objs}
+        valid_rids = {
+            rid for rid, rd in race_dates_map.items()
+            if rd is None or rd >= since_date
+        }
+        results = [r for r in results if r.race_id in valid_rids]
+
     if not results:
         return {"race_difficulties": {}, "athlete_strengths": {}, "athlete_race_counts": {}}
 
@@ -71,8 +96,15 @@ def _compute_old_als_program(
             if v is not None:
                 data[a][rr][f] = float(v)
 
+    # min_athlete_races フィルタ
+    if min_athlete_races > 1:
+        data = {a: races for a, races in data.items() if len(races) >= min_athlete_races}
+
+    if not data:
+        return {"race_difficulties": {}, "athlete_strengths": {}, "athlete_race_counts": {}}
+
     athlete_ids = list(data.keys())
-    race_ids = list({r.race_id for r in results})
+    race_ids = list({r.race_id for r in results if r.athlete_id in data})
 
     diff = {r: {f: 0.0 for f in _OPT_FIELDS} for r in race_ids}
     strength: dict[str, dict[str, float]] = {}
@@ -85,6 +117,8 @@ def _compute_old_als_program(
     weights = {a: {r: 1.0 for r in data[a]} for a in athlete_ids}
 
     for _ in range(max_iter):
+        prev = {a: strength[a]["total_sec"] for a in athlete_ids}
+
         for a in athlete_ids:
             for f in _OPT_FIELDS:
                 num = den = 0.0
@@ -128,6 +162,11 @@ def _compute_old_als_program(
             for (a, r), ar in zip(pairs, abs_residuals):
                 weights[a][r] = max(min_weight, thr / ar) if thr > 0 and ar > thr else 1.0
 
+        if tol > 0:
+            max_change = max(abs(strength[a]["total_sec"] - prev[a]) for a in athlete_ids)
+            if max_change < tol:
+                break
+
     return {
         "race_difficulties": {r: {f: diff[r][f] for f in _OPT_FIELDS} for r in race_ids},
         "athlete_strengths": {
@@ -138,6 +177,8 @@ def _compute_old_als_program(
     }
 
 
+# ── 集計ユーティリティ ─────────────────────────────────────────────────────────
+
 def _mae(errors: list[float]) -> float | None:
     return sum(abs(e) for e in errors) / len(errors) if errors else None
 
@@ -146,52 +187,72 @@ def _rmse(errors: list[float]) -> float | None:
     return math.sqrt(sum(e ** 2 for e in errors) / len(errors)) if errors else None
 
 
-def evaluate_difficulty_models(session: Session) -> dict[str, Any]:
+def _agg(errs: list[float]) -> dict:
+    mae = _mae(errs)
+    rmse = _rmse(errs)
+    return {
+        "mae_sec": round(mae, 2) if mae is not None else None,
+        "rmse_sec": round(rmse, 2) if rmse is not None else None,
+        "n": len(errs),
+    }
+
+
+# ── メイン評価関数 ─────────────────────────────────────────────────────────────
+
+def evaluate_difficulty_models(
+    session: Session,
+    since_years: int | None = None,
+    min_athlete_races: int = 1,
+) -> dict[str, Any]:
     """
     全レース・全プログラムについてレースアウト CV を実行し、
     4 モデルの予測精度を比較する。
 
+    引数:
+        since_years: None なら全期間。整数を渡すと直近 N 年のレースのみ評価対象にする。
+            ALS の学習データも同じ期間に絞ることで計算量を大幅に削減できる。
+        min_athlete_races: 出場レース数がこの値未満の選手を ALS から除外する。
+            2 以上にすると疎な選手が減り高速化する。
+
     Returns: {
-        "summary": {
-            model_name: {"mae_sec": float, "rmse_sec": float, "n": int}
-        },
-        "by_segment": {
-            model_name: {
-                segment: {"mae_sec": float, "rmse_sec": float, "n": int}
-            }
-        },
-        "by_program": {
-            program_name: {
-                model_name: {"mae_sec": float, "rmse_sec": float, "n": int}
-            }
-        },
+        "summary": {model_name: {"mae_sec", "rmse_sec", "n"}},
+        "by_segment": {model_name: {segment: {...}}},
+        "by_program": {program_name: {model_name: {...}}},
         "n_races_evaluated": int,
+        "filters": {"since_years": ..., "min_athlete_races": ...},
     }
     """
-    races = session.exec(select(Race)).all()
-    programs_with_data: set[str] = {
-        r.program_name
-        for r in session.exec(
-            select(Result).where(
-                Result.status == "Finished",
-                Result.total_sec.isnot(None),
-            )
-        ).all()
-    }
+    since_date: date_type | None = None
+    if since_years is not None:
+        since_date = date_type.today() - timedelta(days=since_years * 365)
 
-    # errors[model][field] = [error_seconds, ...]
+    races = session.exec(select(Race)).all()
+
+    # ── フルデータ ALS を1回だけ計算（ループ外）──────────────────────────────
+    # コース難易度の推定に使用。ループ内に置くとR倍遅くなる（前回のバグ）。
+    unified_full = compute_optimized_unified(
+        session,
+        since_date=since_date,
+        min_athlete_races=min_athlete_races,
+    )
+    full_race_diffs = unified_full["race_difficulties"]
+
     models = ["old_als", "unified", "same_cat", "cross_cat"]
     segments = _OPT_FIELDS
     all_errors: dict[str, dict[str, list[float]]] = {
         m: {f: [] for f in segments} for m in models
     }
-    # prog_errors[program][model][field]
     prog_errors: dict[str, dict[str, dict[str, list[float]]]] = {}
 
     n_races_evaluated = 0
 
     for race in races:
         rid = race.id
+
+        # since_date フィルタ: 評価対象レースも絞る
+        if since_date is not None and race.date is not None and race.date < since_date:
+            continue
+
         race_results = session.exec(
             select(Result).where(
                 Result.race_id == rid,
@@ -204,16 +265,23 @@ def evaluate_difficulty_models(session: Session) -> dict[str, Any]:
 
         programs_in_race = {r.program_name for r in race_results}
 
-        # 統合 ALS（新モデル）: 選手強さはテストレース除外で学習、コース難易度はフルデータを使用
-        unified_holdout = compute_optimized_unified(session, exclude_race_ids={rid})
-        unified_full = compute_optimized_unified(session)  # 難易度取得用（フルデータ）
-        full_race_diffs = unified_full["race_difficulties"]
+        # 統合 ALS（新モデル）: 選手強さはテストレース除外で学習
+        unified_holdout = compute_optimized_unified(
+            session,
+            exclude_race_ids={rid},
+            since_date=since_date,
+            min_athlete_races=min_athlete_races,
+        )
 
-        # 旧 ALS: プログラム別に除外して学習（まとめてキャッシュ）
+        # 旧 ALS: プログラム別に除外して学習
         old_als_by_prog: dict[str, dict] = {}
         for prog in programs_in_race:
             old_als_by_prog[prog] = _compute_old_als_program(
-                session, prog, exclude_race_ids={rid}
+                session,
+                prog,
+                exclude_race_ids={rid},
+                since_date=since_date,
+                min_athlete_races=min_athlete_races,
             )
 
         n_races_evaluated += 1
@@ -222,7 +290,7 @@ def evaluate_difficulty_models(session: Session) -> dict[str, Any]:
             prog_errors.setdefault(prog, {m: {f: [] for f in segments} for m in models})
 
             # same_cat / cross_cat: テストレース当日の実走タイムを使って難易度を計算する
-            # （レース当日の速報タイムを利用する運用を想定。事前予測との直接比較は公平でない）
+            # （「速報補正」用途。事前予測との直接比較は公平でない — コードコメント参照）
             same_diff_total, _ = compute_race_difficulty_with_n(session, rid, prog)
             cross_diff_total, _ = compute_race_difficulty_cross_with_n(session, rid, prog)
 
@@ -230,8 +298,7 @@ def evaluate_difficulty_models(session: Session) -> dict[str, Any]:
 
             for r in prog_results:
                 # ---- old_als ----
-                # 選手強さ: テストレース除外後の ALS
-                # コース難易度: フルデータ ALS の推定値（過去の同会場実績から事前推定するシナリオ）
+                # 強さ=hold-out、コース難易度=フルデータALS推定（事前推定シナリオ）
                 oa = old_als_by_prog[prog]
                 oa_str = oa["athlete_strengths"].get(r.athlete_id)
                 for f in segments:
@@ -247,8 +314,7 @@ def evaluate_difficulty_models(session: Session) -> dict[str, Any]:
                         prog_errors[prog]["old_als"][f].append(err)
 
                 # ---- unified ----
-                # 選手強さ: テストレース除外後の統合 ALS
-                # コース難易度: フルデータ ALS の推定値
+                # 強さ=hold-out、コース難易度=フルデータALS推定
                 uni_prog = unified_holdout["program_results"].get(prog, {})
                 uni_str = uni_prog.get("athlete_strengths", {}).get(r.athlete_id)
                 for f in segments:
@@ -263,46 +329,34 @@ def evaluate_difficulty_models(session: Session) -> dict[str, Any]:
                         all_errors["unified"][f].append(err)
                         prog_errors[prog]["unified"][f].append(err)
 
-                # ---- same_cat ----
+                # ---- same_cat ----（当日データ利用 = リークあり）
                 actual_total = r.total_sec
                 if actual_total is not None and same_diff_total is not None:
-                    # same_cat の強さ = 旧 ALS の strength（r 除外後）
-                    if oa_str and oa_str.get("strength") is not None:
-                        pred = oa_str["strength"] + same_diff_total
+                    oa_str_check = oa["athlete_strengths"].get(r.athlete_id)
+                    if oa_str_check and oa_str_check.get("strength") is not None:
+                        pred = oa_str_check["strength"] + same_diff_total
                         err = float(actual_total) - pred
                         all_errors["same_cat"]["total_sec"].append(err)
                         prog_errors[prog]["same_cat"]["total_sec"].append(err)
 
-                # ---- cross_cat ----
+                # ---- cross_cat ----（当日データ利用 = リークあり）
                 if actual_total is not None and cross_diff_total is not None:
-                    if oa_str and oa_str.get("strength") is not None:
-                        pred = oa_str["strength"] + cross_diff_total
+                    oa_str_check = oa["athlete_strengths"].get(r.athlete_id)
+                    if oa_str_check and oa_str_check.get("strength") is not None:
+                        pred = oa_str_check["strength"] + cross_diff_total
                         err = float(actual_total) - pred
                         all_errors["cross_cat"]["total_sec"].append(err)
                         prog_errors[prog]["cross_cat"]["total_sec"].append(err)
-
-    # 集計
-    def _agg(errs: list[float]) -> dict:
-        mae = _mae(errs)
-        rmse = _rmse(errs)
-        return {
-            "mae_sec": round(mae, 2) if mae is not None else None,
-            "rmse_sec": round(rmse, 2) if rmse is not None else None,
-            "n": len(errs),
-        }
 
     summary = {m: _agg(all_errors[m]["total_sec"]) for m in models}
 
     by_segment = {
         m: {f: _agg(all_errors[m][f]) for f in segments}
-        for m in ["old_als", "unified"]  # same/cross は total_sec のみ
+        for m in ["old_als", "unified"]
     }
 
     by_program = {
-        prog: {
-            m: _agg(prog_errors[prog][m]["total_sec"])
-            for m in models
-        }
+        prog: {m: _agg(prog_errors[prog][m]["total_sec"]) for m in models}
         for prog in sorted(prog_errors.keys())
     }
 
@@ -311,142 +365,34 @@ def evaluate_difficulty_models(session: Session) -> dict[str, Any]:
         "by_segment": by_segment,
         "by_program": by_program,
         "n_races_evaluated": n_races_evaluated,
+        "filters": {
+            "since_years": since_years,
+            "min_athlete_races": min_athlete_races,
+        },
     }
 
 
 # ── 時間減衰 半減期比較 ────────────────────────────────────────────────────────
 
-def _compute_unified_with_halflife(
+def evaluate_halflife_comparison(
     session: Session,
-    halflife_days: int,
-    exclude_race_ids: set[int] | None = None,
-    outlier_k: float = 2.5,
-    min_weight: float = 0.1,
-    max_iter: int = 30,
-) -> dict:
-    """指定した半減期で統合 ALS を計算する（als_optimizer の _HALFLIFE_DAYS を上書き）。"""
-    from app.services import als_optimizer as _als
-    import math as _math
-    from datetime import date as _date
-
-    all_results = session.exec(
-        select(Result).where(
-            Result.status == "Finished",
-            Result.total_sec.isnot(None),
-        )
-    ).all()
-    if exclude_race_ids:
-        all_results = [r for r in all_results if r.race_id not in exclude_race_ids]
-    if not all_results:
-        return {"race_difficulties": {}, "program_results": {}}
-
-    race_ids_set = {r.race_id for r in all_results}
-    race_objs = session.exec(select(Race).where(Race.id.in_(list(race_ids_set)))).all()
-    race_dates = {r.id: r.date for r in race_objs}
-    today = _date.today()
-
-    def _tw(race_date) -> float:
-        if race_date is None:
-            return 1.0
-        days_ago = max(0, (today - race_date).days)
-        return _math.exp(-_math.log(2) * days_ago / halflife_days)
-
-    time_wt = {rid: _tw(race_dates.get(rid)) for rid in race_ids_set}
-
-    prog_data: dict[str, dict[str, dict[int, dict[str, float]]]] = {}
-    for r in all_results:
-        p, a, rr = r.program_name, r.athlete_id, r.race_id
-        prog_data.setdefault(p, {}).setdefault(a, {}).setdefault(rr, {})
-        for f in _OPT_FIELDS:
-            v = getattr(r, f)
-            if v is not None:
-                prog_data[p][a][rr][f] = float(v)
-
-    programs = list(prog_data.keys())
-    all_race_ids = list(race_ids_set)
-
-    diff = {r: {f: 0.0 for f in _OPT_FIELDS} for r in all_race_ids}
-    strength: dict[str, dict[str, dict[str, float]]] = {}
-    for p in programs:
-        strength[p] = {}
-        for a in prog_data[p]:
-            strength[p][a] = {}
-            for f in _OPT_FIELDS:
-                vals = [prog_data[p][a][r][f] for r in prog_data[p][a] if f in prog_data[p][a][r]]
-                strength[p][a][f] = sum(vals) / len(vals) if vals else 0.0
-
-    from app.services.als_optimizer import _program_seg_weight
-    ow = {p: {a: {r: 1.0 for r in prog_data[p][a]} for a in prog_data[p]} for p in programs}
-
-    for _ in range(max_iter):
-        for p in programs:
-            for a in prog_data[p]:
-                for f in _OPT_FIELDS:
-                    num = den = 0.0
-                    for r in prog_data[p][a]:
-                        if f in prog_data[p][a][r]:
-                            w = ow[p][a].get(r, 1.0) * time_wt.get(r, 1.0)
-                            num += w * (prog_data[p][a][r][f] - diff[r][f])
-                            den += w
-                    strength[p][a][f] = num / den if den > 0 else 0.0
-
-        for r in all_race_ids:
-            for f in _OPT_FIELDS:
-                num = den = 0.0
-                for p in programs:
-                    pw = _program_seg_weight(p, f)
-                    if pw == 0.0:
-                        continue
-                    for a in prog_data[p]:
-                        if r in prog_data[p][a] and f in prog_data[p][a][r]:
-                            w = ow[p][a].get(r, 1.0) * time_wt.get(r, 1.0) * pw
-                            num += w * (prog_data[p][a][r][f] - strength[p][a][f])
-                            den += w
-                diff[r][f] = num / den if den > 0 else 0.0
-
-        if all_race_ids:
-            for f in _OPT_FIELDS:
-                mean_d = sum(diff[r][f] for r in all_race_ids) / len(all_race_ids)
-                for r in all_race_ids:
-                    diff[r][f] -= mean_d
-                for p in programs:
-                    for a in prog_data[p]:
-                        strength[p][a][f] += mean_d
-
-        for p in programs:
-            abs_res, pairs = [], []
-            for a in prog_data[p]:
-                for r in prog_data[p][a]:
-                    if "total_sec" in prog_data[p][a][r]:
-                        res = prog_data[p][a][r]["total_sec"] - (
-                            strength[p][a]["total_sec"] + diff[r]["total_sec"]
-                        )
-                        abs_res.append(abs(res))
-                        pairs.append((a, r))
-            if abs_res:
-                n = len(abs_res)
-                s = sorted(abs_res)
-                mad = s[n // 2] if n % 2 == 1 else (s[n // 2 - 1] + s[n // 2]) / 2
-                thr = outlier_k * mad * 1.4826
-                for (a, r), ar in zip(pairs, abs_res):
-                    ow[p][a][r] = max(min_weight, thr / ar) if thr > 0 and ar > thr else 1.0
-
-    race_difficulties = {r: {f: diff[r][f] for f in _OPT_FIELDS} for r in all_race_ids}
-    program_results = {}
-    for p in programs:
-        program_results[p] = {
-            "race_difficulties": race_difficulties,
-            "athlete_strengths": {
-                a: {_field_to_strength_key(f): strength[p][a][f] for f in _OPT_FIELDS}
-                for a in prog_data[p]
-            },
-        }
-    return {"race_difficulties": race_difficulties, "program_results": program_results}
-
-
-def evaluate_halflife_comparison(session: Session, halflives: list[int] | None = None) -> dict[str, Any]:
+    halflives: list[int] | None = None,
+    since_years: int | None = None,
+    min_athlete_races: int = 1,
+    sample_ratio: float = 1.0,
+    seed: int = 42,
+) -> dict[str, Any]:
     """
     時間減衰の半減期（デフォルト: 365/270/180日）ごとに統合 ALS の精度を比較する。
+
+    引数:
+        halflives: 比較する半減期のリスト（日数）。
+        since_years: 直近 N 年のレースのみ評価対象にする（None = 全期間）。
+        min_athlete_races: 疎な選手の除外閾値。
+        sample_ratio: 0〜1 の範囲で評価するレースの割合を指定。
+            1.0 なら全レースを LOOCV、0.3 なら 30% をランダムサンプリング。
+            高速化したい場合は 0.3〜0.5 を推奨。
+        seed: サブサンプリング用の乱数シード。
 
     評価条件:
       - 選手強さ: テストレース除外で学習（真の hold-out）
@@ -454,26 +400,49 @@ def evaluate_halflife_comparison(session: Session, halflives: list[int] | None =
 
     Returns:
         {
-            "halflives": [
-                {"halflife_days": int, "mae_sec": float, "rmse_sec": float, "n": int}
-            ],
+            "halflives": [{"halflife_days", "mae_sec", "rmse_sec", "n"}, ...],
             "best_halflife_days": int,
+            "filters": {...},
+            "note": str,
         }
     """
     if halflives is None:
         halflives = [365, 270, 180]
 
-    races = session.exec(select(Race)).all()
+    since_date: date_type | None = None
+    if since_years is not None:
+        since_date = date_type.today() - timedelta(days=since_years * 365)
+
+    all_races = session.exec(select(Race)).all()
+
+    # since_date フィルタ
+    if since_date is not None:
+        all_races = [
+            r for r in all_races
+            if r.date is None or r.date >= since_date
+        ]
+
+    # サブサンプリング
+    if 0.0 < sample_ratio < 1.0:
+        rng = random.Random(seed)
+        k = max(1, int(len(all_races) * sample_ratio))
+        all_races = rng.sample(all_races, k)
+
     results_all = []
 
     for hl in halflives:
-        # フルデータ（コース難易度取得用）
-        full_model = _compute_unified_with_halflife(session, hl)
+        # フルデータ ALS（コース難易度取得用）をループ外で1回計算
+        full_model = compute_optimized_unified(
+            session,
+            halflife_days=hl,
+            since_date=since_date,
+            min_athlete_races=min_athlete_races,
+        )
         full_diffs = full_model["race_difficulties"]
 
         abs_errors: list[float] = []
 
-        for race in races:
+        for race in all_races:
             rid = race.id
             race_results = session.exec(
                 select(Result).where(
@@ -485,7 +454,13 @@ def evaluate_halflife_comparison(session: Session, halflives: list[int] | None =
             if not race_results:
                 continue
 
-            holdout = _compute_unified_with_halflife(session, hl, exclude_race_ids={rid})
+            holdout = compute_optimized_unified(
+                session,
+                halflife_days=hl,
+                exclude_race_ids={rid},
+                since_date=since_date,
+                min_athlete_races=min_athlete_races,
+            )
             course_diff = full_diffs.get(rid, {}).get("total_sec", 0.0)
 
             for r in race_results:
@@ -509,8 +484,15 @@ def evaluate_halflife_comparison(session: Session, halflives: list[int] | None =
     return {
         "halflives": results_all,
         "best_halflife_days": best["halflife_days"],
+        "filters": {
+            "since_years": since_years,
+            "min_athlete_races": min_athlete_races,
+            "sample_ratio": sample_ratio,
+            "n_races_sampled": len(all_races),
+        },
         "note": (
             "評価条件: 選手強さ=テストレース除外ALS, コース難易度=フルデータALS推定値。"
             "半減期が短いほど直近レースを重視し、古いレースの影響を減らします。"
+            f"sample_ratio={sample_ratio} のため全レースの {int(sample_ratio*100)}% をサンプリング評価。"
         ),
     }

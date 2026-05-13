@@ -7,6 +7,12 @@
      サンプル数の少ないカテゴリの推定精度を向上。
      PTWC のバイク・ランはハンドサイクル・車いすのため貢献ウェイトを低減。
   3. 強さパラメータは従来通りプログラム別（各カテゴリのランキングに使用）。
+
+改良点（v3）:
+  4. since_date: 指定日以降のレースのみを使用（精度チェックの高速化に利用）。
+  5. min_athlete_races: 出場レース数が少ない選手を除外（疎な選手は難易度推定に
+     寄与しにくい）。
+  6. tol: 連続する反復間の最大変化量が tol 秒未満になったら早期終了。
 """
 import math
 from datetime import date as date_type
@@ -28,14 +34,12 @@ def _field_to_strength_key(f: str) -> str:
     return "strength_" + f.replace("_sec", "")
 
 
-def _time_weight(race_date, today: date_type | None = None) -> float:
-    """レース日から経過年数に基づく時間減衰ウェイト。半減期 = 1 年。"""
-    if today is None:
-        today = date_type.today()
+def _time_weight(race_date, halflife_days: int, today: date_type) -> float:
+    """レース日から経過年数に基づく時間減衰ウェイト。"""
     if race_date is None:
         return 1.0
     days_ago = max(0, (today - race_date).days)
-    return math.exp(-math.log(2) * days_ago / _HALFLIFE_DAYS)
+    return math.exp(-math.log(2) * days_ago / halflife_days)
 
 
 def _program_seg_weight(program_name: str, field: str) -> float:
@@ -53,10 +57,23 @@ def compute_optimized_unified(
     outlier_k: float = 2.5,
     min_weight: float = 0.1,
     max_iter: int = 30,
+    tol: float = 0.5,
     exclude_race_ids: set[int] | None = None,
+    since_date: date_type | None = None,
+    min_athlete_races: int = 1,
+    halflife_days: int = _HALFLIFE_DAYS,
 ) -> dict:
     """
     全プログラム横断・時間減衰付き ALS + IRLS。
+
+    引数:
+        since_date: この日付以降のレースのみを使用する（None = 全期間）。
+        min_athlete_races: この回数未満のレース参加選手を除外する。
+            疎な選手は難易度推定に寄与しないため除外すると高速化できる。
+        tol: 連続する反復間の strength 最大変化量がこの値（秒）未満になったら
+            早期終了する。0 を指定すると常に max_iter 回実行する。
+        halflife_days: 時間減衰の半減期（日数）。デフォルト 365 日。
+        exclude_race_ids: 学習から除外するレース ID のセット（LOOCV 用）。
 
     モデル:
         actual[a, r, p, s] ≈ strength[a, p, s] + difficulty[r, s]
@@ -91,13 +108,26 @@ def compute_optimized_unified(
     if not all_results:
         return {"race_difficulties": {}, "program_results": {}}
 
-    # レース日取得（時間減衰用）
+    # レース日取得（時間減衰用・since_date フィルタ用）
     race_ids_set = {r.race_id for r in all_results}
     race_objs = session.exec(select(Race).where(Race.id.in_(list(race_ids_set)))).all()
     race_dates = {r.id: r.date for r in race_objs}
     today = date_type.today()
+
+    # since_date フィルタ: 対象期間外のレースを除外
+    if since_date is not None:
+        valid_race_ids = {
+            rid for rid, rd in race_dates.items()
+            if rd is None or rd >= since_date
+        }
+        all_results = [r for r in all_results if r.race_id in valid_race_ids]
+        if not all_results:
+            return {"race_difficulties": {}, "program_results": {}}
+        race_ids_set = {r.race_id for r in all_results}
+
     time_wt: dict[int, float] = {
-        rid: _time_weight(race_dates.get(rid), today) for rid in race_ids_set
+        rid: _time_weight(race_dates.get(rid), halflife_days, today)
+        for rid in race_ids_set
     }
 
     # prog_data[program][athlete_id][race_id][field] = value
@@ -109,6 +139,19 @@ def compute_optimized_unified(
             v = getattr(r, f)
             if v is not None:
                 prog_data[p][a][rr][f] = float(v)
+
+    # min_athlete_races フィルタ: 出場レース数が少ない選手を除外
+    if min_athlete_races > 1:
+        for p in list(prog_data.keys()):
+            prog_data[p] = {
+                a: races for a, races in prog_data[p].items()
+                if len(races) >= min_athlete_races
+            }
+            if not prog_data[p]:
+                del prog_data[p]
+
+    if not prog_data:
+        return {"race_difficulties": {}, "program_results": {}}
 
     programs = list(prog_data.keys())
     all_race_ids = list(race_ids_set)
@@ -130,7 +173,12 @@ def compute_optimized_unified(
         for p in programs
     }
 
-    for _ in range(max_iter):
+    for _iter in range(max_iter):
+        prev_strength_total = {
+            p: {a: strength[p][a]["total_sec"] for a in prog_data[p]}
+            for p in programs
+        }
+
         # a. strength 更新（プログラム別）
         for p in programs:
             for a in prog_data[p]:
@@ -187,6 +235,16 @@ def compute_optimized_unified(
                 thr = outlier_k * mad * 1.4826
                 for (a, r), ar in zip(pairs, abs_res):
                     ow[p][a][r] = max(min_weight, thr / ar) if thr > 0 and ar > thr else 1.0
+
+        # e. 早期終了チェック（tol > 0 のときのみ）
+        if tol > 0:
+            max_change = max(
+                abs(strength[p][a]["total_sec"] - prev_strength_total[p][a])
+                for p in programs
+                for a in prog_data[p]
+            )
+            if max_change < tol:
+                break
 
     # 結果整形
     race_difficulties = {r: {f: diff[r][f] for f in _OPT_FIELDS} for r in all_race_ids}
