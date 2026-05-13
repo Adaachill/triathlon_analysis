@@ -10,6 +10,47 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-13: 精度チェック・半減期比較の大幅高速化
+**コミット:** `TBD`
+**ブランチ:** claude/speedup-eval-accuracy-xK3m
+
+### 変更内容
+- `app/services/als_optimizer.py`: `compute_optimized_unified` に引数追加
+  - `since_date`, `min_athlete_races`, `tol`（早期停止）, `halflife_days`（可変化）
+- `app/services/eval_difficulty.py`: 全面書き直し
+  - **致命的バグ修正**: `unified_full` をループ外で1回計算（旧コードはループ内でR回）
+  - `evaluate_difficulty_models` に `since_years` / `min_athlete_races` 引数追加
+  - `evaluate_halflife_comparison` に `sample_ratio`（サブサンプリング）追加
+  - `_compute_unified_with_halflife` を削除（`compute_optimized_unified(halflife_days=...)` に統合）
+- `app/routers/admin.py`: クエリパラメータ追加（since_years, min_athlete_races, sample_ratio）
+- `frontend/src/api.ts`, `Guide.tsx`, `Guide.css`: 評価UIにフィルタセレクタ追加
+
+### 変更意図・背景
+精度チェック・半減期比較がタイムアウトする問題を調査した結果、前回PR（#31）で混入した
+致命的バグを発見。`unified_full = compute_optimized_unified(session)` がLOOCVループ内で
+R回呼び出されており（毎回同じ結果）、R倍（100〜200倍）遅くなっていた。
+
+バグ修正に加え、ユーザー提案の「直近2年フィルタ」「疎な選手の除外」も実装。
+
+### 技術的決定事項
+- バグ修正が最大効果: ループ外化だけでR倍高速化
+- `tol`早期停止: 通常10〜15反復で収束するため `tol=0.5` 秒で打ち切り（max_iter=30維持）
+- `sample_ratio`: halflife比較でレースをサブサンプリング（0.3〜0.5推奨）
+- デフォルトは後方互換維持（since_date=None, min_athlete_races=1）
+- UIデフォルトは推奨値（since_years=2, min_races=2）
+
+### 推奨する実行パラメータ（本番での実測用）
+```
+GET /admin/evaluate_difficulty?since_years=2&min_athlete_races=2
+GET /admin/compare_halflife?since_years=2&min_athlete_races=2&sample_ratio=0.3
+```
+
+### 残課題・次のステップ
+- 本番環境で上記パラメータ付きで実測し、処理時間と MAE を確認
+- 半減期比較の結果を元に `_HALFLIFE_DAYS` の最適値を決定して別PRで反映
+
+---
+
 ## 2026-05-12: メダル表示・セグメント順位が反映されない問題の修正
 **コミット:** `45fdc92`
 **ブランチ:** claude/fix-medal-display-rankings-W2usm

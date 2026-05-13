@@ -430,6 +430,7 @@ export interface EvalResult {
   by_segment: Record<string, Record<string, EvalModelStat>>;
   by_program: Record<string, Record<string, EvalModelStat>>;
   n_races_evaluated: number;
+  filters?: { since_years: number | null; min_athlete_races: number };
 }
 
 export const api = {
@@ -445,7 +446,12 @@ export const api = {
     fetchApi<RankingsDiffResponse>('/rankings/diff', { program_name: programName, new_race_id: String(newRaceId) }),
   getAthlete: (athleteId: string, programName: string) =>
     fetchApi<AthleteDetail>(`/athletes/${athleteId}`, { program_name: programName }),
-  getEvaluation: () => fetchApi<EvalResult>('/admin/evaluate_difficulty'),
+  getEvaluation: (sinceYears?: number, minAthleteRaces?: number) => {
+    const params: Record<string, string> = {};
+    if (sinceYears != null) params['since_years'] = String(sinceYears);
+    if (minAthleteRaces != null && minAthleteRaces > 1) params['min_athlete_races'] = String(minAthleteRaces);
+    return fetchApi<EvalResult>('/admin/evaluate_difficulty', Object.keys(params).length ? params : undefined);
+  },
   uploadStartlist: (file: File, eventId?: string, eventDate?: string, raceName?: string) => {
     const form = new FormData();
     form.append('file', file);

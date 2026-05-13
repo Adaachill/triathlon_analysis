@@ -32,12 +32,14 @@ function EvalSection() {
   const [evalData, setEvalData] = useState<EvalResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sinceYears, setSinceYears] = useState<number | undefined>(2)
+  const [minRaces, setMinRaces] = useState<number>(2)
 
   const run = async () => {
     setLoading(true)
     setError(null)
     try {
-      const result = await api.getEvaluation()
+      const result = await api.getEvaluation(sinceYears, minRaces)
       setEvalData(result)
     } catch (e) {
       setError((e as Error).message)
@@ -90,6 +92,37 @@ function EvalSection() {
           </li>
         </ul>
       </div>
+
+      {/* フィルタ設定 */}
+      <div className="guide-eval-filters">
+        <label className="guide-eval-filter-item">
+          <span>評価期間</span>
+          <select
+            value={sinceYears ?? ''}
+            onChange={e => setSinceYears(e.target.value === '' ? undefined : Number(e.target.value))}
+            disabled={loading}
+          >
+            <option value="">全期間</option>
+            <option value="1">直近1年</option>
+            <option value="2">直近2年（推奨）</option>
+            <option value="3">直近3年</option>
+            <option value="5">直近5年</option>
+          </select>
+        </label>
+        <label className="guide-eval-filter-item">
+          <span>選手フィルタ</span>
+          <select
+            value={minRaces}
+            onChange={e => setMinRaces(Number(e.target.value))}
+            disabled={loading}
+          >
+            <option value="1">除外なし</option>
+            <option value="2">2戦以上のみ（推奨）</option>
+            <option value="3">3戦以上のみ</option>
+          </select>
+        </label>
+      </div>
+
       <button
         className="guide-eval-btn"
         onClick={run}
@@ -102,7 +135,11 @@ function EvalSection() {
 
       {evalData && (
         <div className="guide-eval-results">
-          <p className="guide-eval-meta">評価レース数: {evalData.n_races_evaluated}レース</p>
+          <p className="guide-eval-meta">
+            評価レース数: {evalData.n_races_evaluated}レース
+            {evalData.filters?.since_years != null && ` (直近${evalData.filters.since_years}年)`}
+            {evalData.filters?.min_athlete_races != null && evalData.filters.min_athlete_races > 1 && ` / ${evalData.filters.min_athlete_races}戦以上の選手のみ`}
+          </p>
 
           {/* モデル別MAE棒グラフ */}
           <div className="guide-eval-chart-section">
