@@ -118,6 +118,8 @@ export default function BumpChart({ athletes }: { athletes: BumpAthleteInput[] }
     if (!svgRef.current || !containerRef.current || chartData.length < 2) return
 
     const containerWidth = containerRef.current.clientWidth
+    if (containerWidth <= 0) return
+
     const margin = { top: 28, right: 60, bottom: 40, left: 36 }
     const width  = containerWidth - margin.left - margin.right
     const n      = chartData.length
@@ -194,12 +196,15 @@ export default function BumpChart({ athletes }: { athletes: BumpAthleteInput[] }
         .on('mouseover', function () { d3.select(this).attr('stroke-width', 4).attr('stroke-opacity', 1) })
         .on('mouseout',  function () { d3.select(this).attr('stroke-width', 2.5).attr('stroke-opacity', 0.85) })
 
-      const totalLen = (pathEl.node() as SVGPathElement).getTotalLength()
-      pathEl
-        .attr('stroke-dasharray', `${totalLen} ${totalLen}`)
-        .attr('stroke-dashoffset', totalLen)
-        .transition().duration(ANIM_MS).ease(d3.easeLinear)
-        .attr('stroke-dashoffset', 0)
+      const pathNode = pathEl.node() as SVGPathElement | null
+      const totalLen = pathNode ? (() => { try { return pathNode.getTotalLength() } catch { return 0 } })() : 0
+      if (totalLen > 0) {
+        pathEl
+          .attr('stroke-dasharray', `${totalLen} ${totalLen}`)
+          .attr('stroke-dashoffset', totalLen)
+          .transition().duration(ANIM_MS).ease(d3.easeLinear)
+          .attr('stroke-dashoffset', 0)
+      }
 
       // Dots + rank-change indicators
       d.checkpoints.forEach((cp, ci) => {
