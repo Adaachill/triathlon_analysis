@@ -3,6 +3,7 @@ import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts'
 import { api, formatTime, formatDiff, getCountryFlag } from '../api'
 import type { RaceResult } from '../api'
+import BumpChart, { type BumpAthleteInput } from './BumpChart'
 import './pages.css'
 
 type ViewMode = 'actual' | 'standard' | 'gap'
@@ -456,6 +457,26 @@ export default function RaceDetail() {
         )}
 
         <CumulativeSegChart results={results} />
+
+        {/* 順位変動バンプチャート（実績タイム） */}
+        <BumpChart athletes={results.flatMap((r): BumpAthleteInput[] => {
+          if (
+            r.status !== 'Finished' ||
+            r.swim_sec == null || r.t1_sec == null ||
+            r.bike_sec == null || r.t2_sec == null || r.run_sec == null
+          ) return []
+          return [{
+            athlete_id: r.athlete_id,
+            first_name: r.first_name,
+            last_name:  r.last_name,
+            country:    r.country,
+            swim_sec:   r.swim_sec,
+            t1_sec:     r.t1_sec,
+            bike_sec:   r.bike_sec,
+            t2_sec:     r.t2_sec,
+            run_sec:    r.run_sec,
+          }]
+        })} />
 
         <div className="results-toolbar">
           <div className="view-mode-selector">
