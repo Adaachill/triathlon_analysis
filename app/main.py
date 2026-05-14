@@ -36,13 +36,20 @@ app.include_router(wt_import.router)
 async def startup_event():
     """起動時にDBを初期化してALSキャッシュを事前ウォームアップ"""
     init_db()
-    # ALS計算を事前実行してキャッシュに格納（最初のAPIリクエストの遅延を防ぐ）
     try:
-        from app.services.als_optimizer import compute_optimized_unified, _CACHE
+        from app.services.als_optimizer import (
+            load_als_from_db, compute_optimized_unified, save_als_to_db, _CACHE
+        )
         with Session(engine) as session:
-            _CACHE["__unified__"] = compute_optimized_unified(session)
+            db_result = load_als_from_db(session)
+            if db_result and db_result.get("program_results"):
+                _CACHE["__unified__"] = db_result
+            else:
+                unified = compute_optimized_unified(session)
+                save_als_to_db(session, unified)
+                _CACHE["__unified__"] = unified
     except Exception:
-        pass  # DB未初期化などの場合は無視
+        pass
 
 
 @app.get("/")

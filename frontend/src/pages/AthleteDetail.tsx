@@ -5,7 +5,7 @@ import {
   BarChart, Bar, LabelList,
 } from 'recharts'
 import { api, formatTime, formatDiff, getCountryFlag } from '../api'
-import type { RankingEntry, AthleteRace } from '../api'
+import type { AthleteRace } from '../api'
 import './pages.css'
 
 const DAYS = 86400000
@@ -206,16 +206,6 @@ function periodAvg(races: AthleteRace[], start: Date, end: Date) {
   }
 }
 
-function segRank(rankings: RankingEntry[], athleteId: string, key: keyof RankingEntry) {
-  const valid = rankings.filter(r => r[key] != null)
-  valid.sort((a, b) => (a[key] as number) - (b[key] as number))
-  const idx = valid.findIndex(r => r.athlete_id === athleteId)
-  if (idx < 0) return null
-  const firstVal = valid[0]?.[key] as number | null
-  const myVal = valid[idx]?.[key] as number | null
-  const diffFromFirst = firstVal != null && myVal != null && idx > 0 ? myVal - firstVal : null
-  return { rank: idx + 1, total: valid.length, diffFromFirst }
-}
 
 function medalIcon(rank: number): string {
   if (rank === 1) return '🥇'
@@ -237,12 +227,11 @@ export default function AthleteDetail() {
   const [searchParams] = useSearchParams()
   const program = searchParams.get('program') ?? ''
   const [programs, setPrograms] = useState<string[]>([])
-  const [selProgram, setSelProgram] = useState(program)
+  const [selProgram, setSelProgram] = useState(program || 'PTS4 Men')
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getAthlete>> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedRaces, setExpandedRaces] = useState<Set<number>>(new Set())
-  const [allRankings, setAllRankings] = useState<RankingEntry[] | null>(null)
 
   useEffect(() => {
     api.getPrograms().then((r) => {
@@ -254,14 +243,9 @@ export default function AthleteDetail() {
   }, [])
 
   useEffect(() => {
-    if (!athleteId) return
-    const prog = selProgram || (programs.includes('PTS4 Men') ? 'PTS4 Men' : (programs[0] ?? ''))
-    if (!prog) {
-      setLoading(false)
-      return
-    }
+    if (!athleteId || !selProgram) return
     setLoading(true)
-    api.getAthlete(athleteId, prog)
+    api.getAthlete(athleteId, selProgram)
       .then((d) => {
         setData(d)
         if ('races' in d) {
@@ -270,16 +254,7 @@ export default function AthleteDetail() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [athleteId, selProgram, programs])
-
-  useEffect(() => {
-    if (program && !selProgram) setSelProgram(program)
-  }, [program])
-
-  useEffect(() => {
-    if (!selProgram) return
-    api.getRankings(selProgram, 500).then(r => setAllRankings(r.rankings))
-  }, [selProgram])
+  }, [athleteId, selProgram])
 
   const toggleExpand = (raceId: number) => {
     setExpandedRaces((prev) => {
@@ -338,22 +313,22 @@ export default function AthleteDetail() {
           <span title="Run">Run <strong>{formatTime(data.strength_run)}</strong></span>
         </div>
 
-        {allRankings && (() => {
+        {data.segment_ranks && (() => {
           const ranks = [
-            { label: '総合',  key: 'strength'      as keyof RankingEntry },
-            { label: 'Swim',  key: 'strength_swim' as keyof RankingEntry },
-            { label: 'T1',    key: 'strength_t1'   as keyof RankingEntry },
-            { label: 'Bike',  key: 'strength_bike' as keyof RankingEntry },
-            { label: 'T2',    key: 'strength_t2'   as keyof RankingEntry },
-            { label: 'Run',   key: 'strength_run'  as keyof RankingEntry },
-          ].map(({ label, key }) => ({ label, result: segRank(allRankings, data.athlete_id, key) }))
+            { label: '総合',  key: 'strength'      },
+            { label: 'Swim',  key: 'strength_swim' },
+            { label: 'T1',    key: 'strength_t1'   },
+            { label: 'Bike',  key: 'strength_bike' },
+            { label: 'T2',    key: 'strength_t2'   },
+            { label: 'Run',   key: 'strength_run'  },
+          ].map(({ label, key }) => ({ label, result: data.segment_ranks![key as keyof typeof data.segment_ranks] ?? null }))
             .filter(({ result }) => result != null)
           if (ranks.length === 0) return null
           return (
             <div className="athlete-seg-ranks">
               {ranks.map(({ label, result }) => {
                 const medal = medalIcon(result!.rank)
-                const diff = fmtTimeDiff(result!.diffFromFirst)
+                const diff = fmtTimeDiff(result!.diff_from_first)
                 return (
                   <span key={label} className={`seg-rank-chip${result!.rank <= 3 ? ' seg-rank-medal' : ''}`}>
                     {medal && <span className="seg-medal-icon">{medal}</span>}

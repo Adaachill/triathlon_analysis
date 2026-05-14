@@ -2,6 +2,7 @@
 from typing import Optional
 from datetime import date
 from fastapi import APIRouter, Query, Depends
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select, col
 from app.deps import get_db
@@ -136,22 +137,25 @@ async def get_race(
 
         result_list.append(result_dict)
 
-    return {
-        "race": {
-            "id": race.id,
-            "event_id": race.event_id,
-            "name": race.name,
-            "date": str(race.date) if race.date else None,
-            "location": race.location,
-            "is_reference": race.is_reference,
-            "points": race.points,
-            "note": race.note,
+    return JSONResponse(
+        content={
+            "race": {
+                "id": race.id,
+                "event_id": race.event_id,
+                "name": race.name,
+                "date": str(race.date) if race.date else None,
+                "location": race.location,
+                "is_reference": race.is_reference,
+                "points": race.points,
+                "note": race.note,
+            },
+            "difficulty_als": difficulty_als,
+            "difficulty_n_als": difficulty_n_als,
+            "difficulty_segments_als": difficulty_segments_als,
+            "results": result_list,
         },
-        "difficulty_als": difficulty_als,
-        "difficulty_n_als": difficulty_n_als,
-        "difficulty_segments_als": difficulty_segments_als,
-        "results": result_list,
-    }
+        headers={"Cache-Control": "public, max-age=60"},
+    )
 
 
 @router.patch("/{race_id}")

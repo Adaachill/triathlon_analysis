@@ -133,6 +133,33 @@ async def get_athlete(
             "strength_rank": strength_rank,
         })
 
+    # セグメント別全体順位を計算（フロントの getRankings(limit=500) 呼び出し不要にする）
+    seg_rank_keys = [
+        ("strength", "strength"),
+        ("strength_swim", "strength_swim"),
+        ("strength_t1", "strength_t1"),
+        ("strength_bike", "strength_bike"),
+        ("strength_t2", "strength_t2"),
+        ("strength_run", "strength_run"),
+    ]
+    segment_ranks: dict[str, dict] = {}
+    for rank_key, strength_key in seg_rank_keys:
+        valid = [
+            (aid, s[strength_key])
+            for aid, s in als_strengths.items()
+            if s.get(strength_key) is not None
+        ]
+        valid.sort(key=lambda x: x[1])
+        idx = next((i for i, (aid, _) in enumerate(valid) if aid == athlete_id), None)
+        if idx is not None:
+            first_val = valid[0][1]
+            my_val = valid[idx][1]
+            segment_ranks[rank_key] = {
+                "rank": idx + 1,
+                "total": len(valid),
+                "diff_from_first": float(my_val - first_val) if idx > 0 else None,
+            }
+
     return {
         "athlete_id": athlete_id,
         "first_name": first_result.first_name,
@@ -147,4 +174,5 @@ async def get_athlete(
         "strength_run": strength_data.get("strength_run") if strength_data else None,
         "race_count": len(race_details),
         "races": race_details,
+        "segment_ranks": segment_ranks,
     }

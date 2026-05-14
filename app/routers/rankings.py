@@ -1,5 +1,6 @@
 """ランキングAPI"""
 from fastapi import APIRouter, Query, Depends
+from fastapi.responses import JSONResponse
 from sqlmodel import Session, select
 from app.deps import get_db
 from app.models import Result
@@ -56,10 +57,10 @@ async def get_top_athletes(
     # strength 昇順（タイムが短い順）にソート
     rankings.sort(key=lambda x: x["strength"])
 
-    return {
-        "program_name": program_name,
-        "rankings": rankings[:limit],
-    }
+    return JSONResponse(
+        content={"program_name": program_name, "rankings": rankings[:limit]},
+        headers={"Cache-Control": "public, max-age=300"},
+    )
 
 
 @router.get("/diff")

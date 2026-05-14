@@ -204,6 +204,12 @@ export interface AthleteRace {
   strength_rank: number | null;
 }
 
+export interface SegmentRankEntry {
+  rank: number;
+  total: number;
+  diff_from_first: number | null;
+}
+
 export interface AthleteDetail {
   athlete_id: string;
   first_name: string;
@@ -218,6 +224,14 @@ export interface AthleteDetail {
   strength_run?: number | null;
   race_count: number;
   races: AthleteRace[];
+  segment_ranks?: {
+    strength?: SegmentRankEntry;
+    strength_swim?: SegmentRankEntry;
+    strength_t1?: SegmentRankEntry;
+    strength_bike?: SegmentRankEntry;
+    strength_t2?: SegmentRankEntry;
+    strength_run?: SegmentRankEntry;
+  } | null;
 }
 
 export interface PredictSegTimes {
