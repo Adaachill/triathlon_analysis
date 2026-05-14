@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api, formatTime } from '../api'
 import type { PredictResponse } from '../api'
-import BumpChart from './BumpChart'
+import BumpChart, { type BumpAthleteInput } from './BumpChart'
 import './pages.css'
 
 const PROGRAM_ORDER = [
@@ -182,7 +182,21 @@ export default function Predict() {
         </div>
 
         {/* 順位変動バンプチャート */}
-        <BumpChart athletes={sorted} />
+        <BumpChart athletes={sorted.flatMap((a): BumpAthleteInput[] => {
+          const p = a.pred_avg
+          if (!a.has_history || p.swim_sec == null || p.t1_sec == null || p.bike_sec == null || p.t2_sec == null || p.run_sec == null) return []
+          return [{
+            athlete_id: a.athlete_id,
+            first_name: a.first_name,
+            last_name: a.last_name,
+            country: a.country,
+            swim_sec: p.swim_sec,
+            t1_sec: p.t1_sec,
+            bike_sec: p.bike_sec,
+            t2_sec: p.t2_sec,
+            run_sec: p.run_sec,
+          }]
+        })} />
       </div>
     </div>
   )
