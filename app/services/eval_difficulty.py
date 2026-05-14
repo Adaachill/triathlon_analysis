@@ -197,6 +197,43 @@ def _agg(errs: list[float]) -> dict:
     }
 
 
+def _rank(values: list[float]) -> list[float]:
+    """昇順ランク（1始まり、同順位は平均ランク）。"""
+    indexed = sorted(enumerate(values), key=lambda x: x[1])
+    ranks = [0.0] * len(values)
+    i = 0
+    while i < len(indexed):
+        j = i
+        while j < len(indexed) - 1 and indexed[j + 1][1] == indexed[i][1]:
+            j += 1
+        avg_rank = (i + j) / 2 + 1
+        for k in range(i, j + 1):
+            ranks[indexed[k][0]] = avg_rank
+        i = j + 1
+    return ranks
+
+
+def _spearman_r(xs: list[float], ys: list[float]) -> float | None:
+    """Spearman ランク相関係数。"""
+    n = len(xs)
+    if n < 2:
+        return None
+    rx, ry = _rank(xs), _rank(ys)
+    d_sq = sum((a - b) ** 2 for a, b in zip(rx, ry))
+    denom = n * (n ** 2 - 1)
+    return 1.0 - 6.0 * d_sq / denom if denom > 0 else None
+
+
+def _pairwise_agg(errs: list[float]) -> dict:
+    mae = _mae(errs)
+    rmse = _rmse(errs)
+    return {
+        "mae_sec": round(mae, 2) if mae is not None else None,
+        "rmse_sec": round(rmse, 2) if rmse is not None else None,
+        "n_pairs": len(errs),
+    }
+
+
 # ── メイン評価関数 ─────────────────────────────────────────────────────────────
 
 def evaluate_difficulty_models(
@@ -218,9 +255,16 @@ def evaluate_difficulty_models(
         "summary": {model_name: {"mae_sec", "rmse_sec", "n"}},
         "by_segment": {model_name: {segment: {...}}},
         "by_program": {program_name: {model_name: {...}}},
+        "pairwise_summary": {model_name: {"mae_sec", "rmse_sec", "n_pairs"}},
+        "pairwise_by_segment": {model_name: {segment: {...}}},
+        "rank_correlation": {model_name: {"mean_spearman_r", "n_races"}},
         "n_races_evaluated": int,
         "filters": {"since_years": ..., "min_athlete_races": ...},
     }
+
+    pairwise_summary / pairwise_by_segment はコース難易度がキャンセルされるため
+    difficulty 推定不要。同一レース内の全選手ペアの strength 差 vs 実タイム差を集計。
+    rank_correlation は各レースの Spearman ρ の平均（1.0 = 完全一致）。
     """
     since_date: date_type | None = None
     if since_years is not None:
@@ -238,11 +282,18 @@ def evaluate_difficulty_models(
     full_race_diffs = unified_full["race_difficulties"]
 
     models = ["old_als", "unified", "same_cat", "cross_cat"]
+    pw_models = ["old_als", "unified"]
     segments = _OPT_FIELDS
     all_errors: dict[str, dict[str, list[float]]] = {
         m: {f: [] for f in segments} for m in models
     }
     prog_errors: dict[str, dict[str, dict[str, list[float]]]] = {}
+
+    # ペアワイズ誤差・ランク相関の収集（difficulty 不要）
+    all_pw_errors: dict[str, dict[str, list[float]]] = {
+        m: {f: [] for f in segments} for m in pw_models
+    }
+    all_rho: dict[str, list[float]] = {m: [] for m in pw_models}
 
     n_races_evaluated = 0
 
@@ -295,12 +346,18 @@ def evaluate_difficulty_models(
             cross_diff_total, _ = compute_race_difficulty_cross_with_n(session, rid, prog)
 
             prog_results = [r for r in race_results if r.program_name == prog]
+            oa = old_als_by_prog[prog]
+            oa_strengths = oa["athlete_strengths"]
+            uni_strengths = (
+                unified_holdout["program_results"]
+                .get(prog, {})
+                .get("athlete_strengths", {})
+            )
 
             for r in prog_results:
                 # ---- old_als ----
                 # 強さ=hold-out、コース難易度=フルデータALS推定（事前推定シナリオ）
-                oa = old_als_by_prog[prog]
-                oa_str = oa["athlete_strengths"].get(r.athlete_id)
+                oa_str = oa_strengths.get(r.athlete_id)
                 for f in segments:
                     actual = getattr(r, f)
                     if actual is None:
@@ -315,8 +372,7 @@ def evaluate_difficulty_models(
 
                 # ---- unified ----
                 # 強さ=hold-out、コース難易度=フルデータALS推定
-                uni_prog = unified_holdout["program_results"].get(prog, {})
-                uni_str = uni_prog.get("athlete_strengths", {}).get(r.athlete_id)
+                uni_str = uni_strengths.get(r.athlete_id)
                 for f in segments:
                     actual = getattr(r, f)
                     if actual is None:
@@ -332,7 +388,7 @@ def evaluate_difficulty_models(
                 # ---- same_cat ----（当日データ利用 = リークあり）
                 actual_total = r.total_sec
                 if actual_total is not None and same_diff_total is not None:
-                    oa_str_check = oa["athlete_strengths"].get(r.athlete_id)
+                    oa_str_check = oa_strengths.get(r.athlete_id)
                     if oa_str_check and oa_str_check.get("strength") is not None:
                         pred = oa_str_check["strength"] + same_diff_total
                         err = float(actual_total) - pred
@@ -341,12 +397,52 @@ def evaluate_difficulty_models(
 
                 # ---- cross_cat ----（当日データ利用 = リークあり）
                 if actual_total is not None and cross_diff_total is not None:
-                    oa_str_check = oa["athlete_strengths"].get(r.athlete_id)
+                    oa_str_check = oa_strengths.get(r.athlete_id)
                     if oa_str_check and oa_str_check.get("strength") is not None:
                         pred = oa_str_check["strength"] + cross_diff_total
                         err = float(actual_total) - pred
                         all_errors["cross_cat"]["total_sec"].append(err)
                         prog_errors[prog]["cross_cat"]["total_sec"].append(err)
+
+            # ---- ペアワイズ評価（difficulty 不要・真のホールドアウト）----
+            # 同一レース内の全選手ペアで strength 差 vs 実タイム差を比較。
+            # difficulty は (actual_i - actual_j) - (strength_i - strength_j) でキャンセル。
+            oa_data = [
+                (r, oa_strengths[r.athlete_id])
+                for r in prog_results
+                if r.athlete_id in oa_strengths
+                and oa_strengths[r.athlete_id].get("strength") is not None
+            ]
+            uni_data = [
+                (r, uni_strengths[r.athlete_id])
+                for r in prog_results
+                if r.athlete_id in uni_strengths
+                and uni_strengths[r.athlete_id].get("strength") is not None
+            ]
+
+            for model_tag, athlete_data in (("old_als", oa_data), ("unified", uni_data)):
+                for fi, (ri, si) in enumerate(athlete_data):
+                    for rj, sj in athlete_data[fi + 1 :]:
+                        for f in segments:
+                            act_i = getattr(ri, f)
+                            act_j = getattr(rj, f)
+                            sk = _field_to_strength_key(f)
+                            str_i = si.get(sk)
+                            str_j = sj.get(sk)
+                            if act_i is None or act_j is None or str_i is None or str_j is None:
+                                continue
+                            pw_err = abs((float(act_i) - float(act_j)) - (str_i - str_j))
+                            all_pw_errors[model_tag][f].append(pw_err)
+
+            # ランク相関（total_sec、プログラム×レースごと）
+            for model_tag, athlete_data in (("old_als", oa_data), ("unified", uni_data)):
+                if len(athlete_data) < 2:
+                    continue
+                actuals = [float(r.total_sec) for r, _ in athlete_data]
+                preds = [s["strength"] for _, s in athlete_data]
+                rho = _spearman_r(actuals, preds)
+                if rho is not None:
+                    all_rho[model_tag].append(rho)
 
     summary = {m: _agg(all_errors[m]["total_sec"]) for m in models}
 
@@ -360,10 +456,32 @@ def evaluate_difficulty_models(
         for prog in sorted(prog_errors.keys())
     }
 
+    pairwise_summary = {
+        m: _pairwise_agg(all_pw_errors[m]["total_sec"]) for m in pw_models
+    }
+
+    pairwise_by_segment = {
+        m: {f: _pairwise_agg(all_pw_errors[m][f]) for f in segments}
+        for m in pw_models
+    }
+
+    rank_correlation = {
+        m: {
+            "mean_spearman_r": (
+                round(sum(all_rho[m]) / len(all_rho[m]), 4) if all_rho[m] else None
+            ),
+            "n_races": len(all_rho[m]),
+        }
+        for m in pw_models
+    }
+
     return {
         "summary": summary,
         "by_segment": by_segment,
         "by_program": by_program,
+        "pairwise_summary": pairwise_summary,
+        "pairwise_by_segment": pairwise_by_segment,
+        "rank_correlation": rank_correlation,
         "n_races_evaluated": n_races_evaluated,
         "filters": {
             "since_years": since_years,
