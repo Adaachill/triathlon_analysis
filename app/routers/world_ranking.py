@@ -1,7 +1,9 @@
 """世界ランキングAPI（開発中）"""
 import re
+import time
 from datetime import date, timedelta
 from fastapi import APIRouter, Query, Depends
+from fastapi.responses import JSONResponse
 from sqlmodel import Session, select
 from app.deps import get_db
 from app.models import Race, Result, Startlist
@@ -11,6 +13,25 @@ router = APIRouter(prefix="/world-ranking", tags=["world-ranking"])
 
 DECAY = 0.925  # 順位ごとのポイント減衰率
 _PREDICTION_MODES = ("none", "previous_year", "startlist")
+
+# (program_name, as_of_date, prediction_mode) -> (result_tuple, monotonic_timestamp)
+_WR_CACHE: dict[tuple, tuple[tuple, float]] = {}
+_WR_CACHE_TTL = 600  # 10分
+
+
+def invalidate_wr_cache() -> None:
+    _WR_CACHE.clear()
+
+
+def _get_wr_cache(key: tuple):
+    entry = _WR_CACHE.get(key)
+    if entry and time.monotonic() - entry[1] < _WR_CACHE_TTL:
+        return entry[0]
+    return None
+
+
+def _set_wr_cache(key: tuple, value: tuple) -> None:
+    _WR_CACHE[key] = (value, time.monotonic())
 
 
 def _calc_position_points(win_points: int, position: int) -> float:
@@ -391,48 +412,58 @@ async def get_world_ranking(
     period1_start = as_of - timedelta(days=365)
     period2_start = as_of - timedelta(days=730)
 
-    all_races = session.exec(
-        select(Race).where(Race.points.isnot(None), Race.date.isnot(None))
-    ).all()
+    cache_key = (program_name, as_of_date, prediction_mode)
+    cached = _get_wr_cache(cache_key)
+    if cached:
+        rankings, predicted_races, baseline_rankings = cached
+    else:
+        all_races = session.exec(
+            select(Race).where(Race.points.isnot(None), Race.date.isnot(None))
+        ).all()
 
-    include_predictions = prediction_mode != "none"
-    cutoff = as_of if include_predictions else min(as_of, today)
+        include_predictions = prediction_mode != "none"
+        cutoff = as_of if include_predictions else min(as_of, today)
 
-    rankings, predicted_races = _compute_rankings(
-        session=session,
-        program_name=program_name,
-        cutoff=cutoff,
-        period1_start=period1_start,
-        period2_start=period2_start,
-        prediction_mode=prediction_mode,
-        all_races=list(all_races),
-        today=today,
-    )
-
-    baseline_rankings: list[dict] | None = None
-    if as_of > today and include_predictions:
-        baseline_period1_start = today - timedelta(days=365)
-        baseline_period2_start = today - timedelta(days=730)
-        baseline_rankings, _ = _compute_rankings(
+        rankings, predicted_races = _compute_rankings(
             session=session,
             program_name=program_name,
-            cutoff=today,
-            period1_start=baseline_period1_start,
-            period2_start=baseline_period2_start,
-            prediction_mode="none",
+            cutoff=cutoff,
+            period1_start=period1_start,
+            period2_start=period2_start,
+            prediction_mode=prediction_mode,
             all_races=list(all_races),
             today=today,
         )
 
-    return {
-        "program_name": program_name,
-        "as_of_date": as_of_date,
-        "prediction_mode": prediction_mode,
-        "current_start": str(period1_start + timedelta(days=1)),
-        "current_end": as_of_date,
-        "previous_start": str(period2_start + timedelta(days=1)),
-        "previous_end": str(period1_start),
-        "rankings": rankings,
-        "predicted_races": predicted_races,
-        "baseline_rankings": baseline_rankings,
-    }
+        baseline_rankings = None
+        if as_of > today and include_predictions:
+            baseline_period1_start = today - timedelta(days=365)
+            baseline_period2_start = today - timedelta(days=730)
+            baseline_rankings, _ = _compute_rankings(
+                session=session,
+                program_name=program_name,
+                cutoff=today,
+                period1_start=baseline_period1_start,
+                period2_start=baseline_period2_start,
+                prediction_mode="none",
+                all_races=list(all_races),
+                today=today,
+            )
+
+        _set_wr_cache(cache_key, (rankings, predicted_races, baseline_rankings))
+
+    return JSONResponse(
+        content={
+            "program_name": program_name,
+            "as_of_date": as_of_date,
+            "prediction_mode": prediction_mode,
+            "current_start": str(period1_start + timedelta(days=1)),
+            "current_end": as_of_date,
+            "previous_start": str(period2_start + timedelta(days=1)),
+            "previous_end": str(period1_start),
+            "rankings": rankings,
+            "predicted_races": predicted_races,
+            "baseline_rankings": baseline_rankings,
+        },
+        headers={"Cache-Control": "public, max-age=300"},
+    )

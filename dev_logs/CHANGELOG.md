@@ -1,5 +1,44 @@
 # 開発履歴
 
+## 2026-05-14: ランキング・レース結果ページのパフォーマンス最適化
+**コミット:** `(本PR)`
+**ブランチ:** claude/optimize-ranking-results-pages-ZDPRL
+
+### 変更内容
+- `app/models.py`: `ALSAthleteStrength`・`ALSRaceDifficulty` テーブルを追加
+- `app/services/als_optimizer.py`: ALS結果のDB保存（`save_als_to_db`）・読み込み（`load_als_from_db`）・バックグラウンド再計算（`recompute_and_save_als`）関数を追加。`get_optimized_program` をDB優先フォールバックに変更。`invalidate_cache` でワールドランキングキャッシュも連動クリア
+- `app/main.py`: 起動時にDBからALS結果を読み込み（DBが空の場合のみ計算してDB保存）
+- `app/routers/admin.py`: Excel インポート後にバックグラウンドでALS再計算をトリガー。`import_raw_excel` にも `invalidate_cache` と再計算を追加
+- `app/routers/athletes.py`: `segment_ranks`（全選手中のセグメント別順位）をレスポンスに追加
+- `app/routers/world_ranking.py`: `_WR_CACHE` による TTL 10分のインメモリキャッシュを追加。`Cache-Control: public, max-age=300` ヘッダーを追加
+- `app/routers/rankings.py`: `Cache-Control: public, max-age=300` ヘッダーを追加
+- `app/routers/races.py`: `Cache-Control: public, max-age=60` ヘッダーを追加
+- `frontend/src/api.ts`: `SegmentRankEntry` 型と `AthleteDetail.segment_ranks` フィールドを追加
+- `frontend/src/pages/AthleteDetail.tsx`: `getRankings(limit=500)` 呼び出しを削除。バックエンドの `segment_ranks` を利用。`selProgram` 初期値を URL パラメータまたは `'PTS4 Men'` に変更して並列フェッチを実現
+- `frontend/src/pages/Rankings.tsx`: `program` 初期値を `'PTS4 Men'` に変更して `getPrograms` と `getRankings` の並列フェッチを実現
+- `frontend/src/pages/WorldRanking.tsx`: `program` 初期値を `'PTS4 Men'` に変更して並列フェッチを実現
+- `frontend/src/pages/RaceDetail.tsx`: `selProgram` 初期値をフォールバック付きに変更、`programs.length` をdeps から除去して重複フェッチを解消
+
+### 変更意図・背景
+ランキングページ・レース結果ページの表示が遅い問題を5つのアプローチで改善:
+- **案A**: ALS計算結果をDBに永続化することでサーバー再起動後も高速応答（1〜10秒 → 数ms）
+- **案B**: ワールドランキングの毎回計算をキャッシュで排除
+- **案C**: フロントのウォーターフォール（`getPrograms` 待ち）を並列化
+- **案D**: アスリートページの `getRankings(limit=500)` 追加呼び出しをバックエンド計算に統合
+- **案E**: HTTPキャッシュヘッダーでブラウザ・CDNキャッシュを活用
+
+### 技術的決定事項
+- ALS計算中は古いDB値を返し続ける設計（ユーザーへの影響最小化）
+- 更新トリガーはデータインポート時のみ（アルゴリズムパラメータ変更時は手動 `recompute_and_save_als` が必要）
+- `invalidate_cache()` はDBデータを保持しインメモリのみクリア（再起動後もDB値から復元可能）
+- ワールドランキングキャッシュは `(program_name, as_of_date, prediction_mode)` をキーとしたTTL方式
+- フロントの program 初期値を `'PTS4 Men'` にすることで、`getPrograms` の結果を待たずにデータフェッチを開始
+
+### 残課題・次のステップ
+- `outlier_weights`（外れ値ウェイト）はDBに保存されていないためレース詳細ページで常に1.0となる（表示のみの影響）
+- 複数ワーカー環境ではインメモリキャッシュが共有されないため、Redis等の外部キャッシュへの移行が望ましい
+- WtImport.tsx・App.tsx 等に既存の TypeScript 型エラーが存在（本PRとは無関係）
+
 ## ルール（2026-05-11 策定）
 
 ### 過去の記録

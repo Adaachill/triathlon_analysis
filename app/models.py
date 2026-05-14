@@ -1,4 +1,4 @@
-from datetime import date as date_
+from datetime import date as date_, datetime
 from sqlmodel import SQLModel, Field
 
 class Race(SQLModel, table=True):
@@ -36,6 +36,34 @@ class Result(SQLModel, table=True):
 
     position: int | None = Field(default=None, index=True)
     status: str = Field(index=True)
+
+class ALSAthleteStrength(SQLModel, table=True):
+    __tablename__ = "als_athlete_strength"
+    id: int | None = Field(default=None, primary_key=True)
+    computed_at: datetime = Field(index=True)
+    program_name: str = Field(index=True)
+    athlete_id: str = Field(index=True)
+    race_count: int = Field(default=0)
+    strength: float
+    strength_swim: float | None = Field(default=None)
+    strength_t1: float | None = Field(default=None)
+    strength_bike: float | None = Field(default=None)
+    strength_t2: float | None = Field(default=None)
+    strength_run: float | None = Field(default=None)
+
+
+class ALSRaceDifficulty(SQLModel, table=True):
+    __tablename__ = "als_race_difficulty"
+    id: int | None = Field(default=None, primary_key=True)
+    computed_at: datetime = Field(index=True)
+    race_id: int = Field(foreign_key="race.id", index=True)
+    difficulty: float
+    difficulty_swim: float | None = Field(default=None)
+    difficulty_t1: float | None = Field(default=None)
+    difficulty_bike: float | None = Field(default=None)
+    difficulty_t2: float | None = Field(default=None)
+    difficulty_run: float | None = Field(default=None)
+
 
 class Startlist(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)

@@ -15,9 +15,10 @@
   6. tol: 連続する反復間の最大変化量が tol 秒未満になったら早期終了。
 """
 import math
-from datetime import date as date_type
+from datetime import date as date_type, datetime
 from sqlmodel import Session, select
-from app.models import Result, Race
+from sqlalchemy import delete as sa_delete
+from app.models import Result, Race, ALSAthleteStrength, ALSRaceDifficulty
 
 _OPT_FIELDS = ["total_sec", "swim_sec", "t1_sec", "bike_sec", "t2_sec", "run_sec"]
 
@@ -278,12 +279,19 @@ def get_optimized_program(
     force_recompute: bool = False,
     **kwargs,
 ) -> dict:
-    """統合キャッシュから指定プログラムの結果を返す。"""
+    """統合キャッシュから指定プログラムの結果を返す。
+    優先順位: インメモリキャッシュ → DB → 計算
+    """
     if not force_recompute and "__unified__" in _CACHE:
         unified = _CACHE["__unified__"]
     else:
-        unified = compute_optimized_unified(session, **kwargs)
-        _CACHE["__unified__"] = unified
+        db_result = load_als_from_db(session)
+        if db_result and db_result.get("program_results"):
+            unified = db_result
+            _CACHE["__unified__"] = unified
+        else:
+            unified = compute_optimized_unified(session, **kwargs)
+            _CACHE["__unified__"] = unified
 
     empty: dict = {
         "race_difficulties": {},
@@ -295,5 +303,105 @@ def get_optimized_program(
 
 
 def invalidate_cache(program_name: str | None = None) -> None:
-    """キャッシュをクリアする。program_name は無視して常に全クリア。"""
+    """インメモリキャッシュをクリアする（DBデータは保持）。"""
     _CACHE.clear()
+    try:
+        from app.routers.world_ranking import invalidate_wr_cache
+        invalidate_wr_cache()
+    except Exception:
+        pass
+
+
+def save_als_to_db(session: Session, unified: dict) -> None:
+    """ALS結果をDBに保存する（既存データを全て置き換える）。"""
+    now = datetime.utcnow()
+
+    session.execute(sa_delete(ALSAthleteStrength))
+    session.execute(sa_delete(ALSRaceDifficulty))
+
+    for race_id, diffs in unified.get("race_difficulties", {}).items():
+        session.add(ALSRaceDifficulty(
+            computed_at=now,
+            race_id=race_id,
+            difficulty=diffs.get("total_sec", 0.0),
+            difficulty_swim=diffs.get("swim_sec"),
+            difficulty_t1=diffs.get("t1_sec"),
+            difficulty_bike=diffs.get("bike_sec"),
+            difficulty_t2=diffs.get("t2_sec"),
+            difficulty_run=diffs.get("run_sec"),
+        ))
+
+    for program_name, prog_data in unified.get("program_results", {}).items():
+        race_counts = prog_data.get("athlete_race_counts", {})
+        for athlete_id, s in prog_data.get("athlete_strengths", {}).items():
+            session.add(ALSAthleteStrength(
+                computed_at=now,
+                program_name=program_name,
+                athlete_id=athlete_id,
+                race_count=race_counts.get(athlete_id, 0),
+                strength=s.get("strength", 0.0),
+                strength_swim=s.get("strength_swim"),
+                strength_t1=s.get("strength_t1"),
+                strength_bike=s.get("strength_bike"),
+                strength_t2=s.get("strength_t2"),
+                strength_run=s.get("strength_run"),
+            ))
+
+    session.commit()
+
+
+def load_als_from_db(session: Session) -> dict | None:
+    """DBからALS結果を読み込んで統合キャッシュ形式で返す。データがなければNone。"""
+    difficulties = session.exec(select(ALSRaceDifficulty)).all()
+    strengths = session.exec(select(ALSAthleteStrength)).all()
+
+    if not strengths:
+        return None
+
+    race_difficulties: dict[int, dict[str, float | None]] = {}
+    for d in difficulties:
+        race_difficulties[d.race_id] = {
+            "total_sec": d.difficulty,
+            "swim_sec": d.difficulty_swim,
+            "t1_sec": d.difficulty_t1,
+            "bike_sec": d.difficulty_bike,
+            "t2_sec": d.difficulty_t2,
+            "run_sec": d.difficulty_run,
+        }
+
+    program_results: dict[str, dict] = {}
+    for s in strengths:
+        p = s.program_name
+        if p not in program_results:
+            program_results[p] = {
+                "race_difficulties": race_difficulties,
+                "athlete_strengths": {},
+                "outlier_weights": {},
+                "athlete_race_counts": {},
+            }
+        program_results[p]["athlete_strengths"][s.athlete_id] = {
+            "strength": s.strength,
+            "strength_swim": s.strength_swim,
+            "strength_t1": s.strength_t1,
+            "strength_bike": s.strength_bike,
+            "strength_t2": s.strength_t2,
+            "strength_run": s.strength_run,
+        }
+        program_results[p]["athlete_race_counts"][s.athlete_id] = s.race_count
+
+    return {
+        "race_difficulties": race_difficulties,
+        "program_results": program_results,
+    }
+
+
+def recompute_and_save_als() -> None:
+    """ALSを再計算してDBに保存し、インメモリキャッシュを更新する（バックグラウンド用）。"""
+    from app.database import engine
+    try:
+        with Session(engine) as session:
+            unified = compute_optimized_unified(session)
+            save_als_to_db(session, unified)
+            _CACHE["__unified__"] = unified
+    except Exception:
+        pass

@@ -2,7 +2,7 @@
 import tempfile
 import os
 from typing import Optional
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, Depends, HTTPException, Query
 from sqlmodel import Session
 from app.deps import get_db
 from app.services.import_excel import import_excel_file, import_all_from_raw_excel
@@ -12,6 +12,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.post("/upload_excel")
 async def upload_excel(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     race_name: str = Form(...),
     race_date: str = Form(...),
@@ -36,8 +37,9 @@ async def upload_excel(
             points=points,
             note=note,
         )
-        from app.services.als_optimizer import invalidate_cache
+        from app.services.als_optimizer import invalidate_cache, recompute_and_save_als
         invalidate_cache()
+        background_tasks.add_task(recompute_and_save_als)
         return {"message": "Import successful", **result}
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -48,9 +50,15 @@ async def upload_excel(
 
 
 @router.post("/import_raw_excel")
-async def import_raw_excel(session: Session = Depends(get_db)):
+async def import_raw_excel(
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_db),
+):
     """raw_excelディレクトリ内の全ファイルをインポート"""
     results = import_all_from_raw_excel(session)
+    from app.services.als_optimizer import invalidate_cache, recompute_and_save_als
+    invalidate_cache()
+    background_tasks.add_task(recompute_and_save_als)
     return {
         "message": "Import completed",
         "results": results,

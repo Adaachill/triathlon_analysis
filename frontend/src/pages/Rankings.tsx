@@ -6,7 +6,7 @@ import './pages.css'
 
 export default function Rankings() {
   const [programs, setPrograms] = useState<string[]>([])
-  const [program, setProgram] = useState('')
+  const [program, setProgram] = useState('PTS4 Men')
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getRankings>> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -15,7 +15,9 @@ export default function Rankings() {
     api.getPrograms()
       .then((r) => {
         setPrograms(r.programs)
-        setProgram(r.programs.includes('PTS4 Men') ? 'PTS4 Men' : (r.programs[0] ?? ''))
+        setProgram((prev) =>
+          r.programs.includes(prev) ? prev : (r.programs.includes('PTS4 Men') ? 'PTS4 Men' : (r.programs[0] ?? ''))
+        )
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))

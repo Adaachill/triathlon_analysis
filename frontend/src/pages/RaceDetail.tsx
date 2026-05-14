@@ -252,7 +252,7 @@ export default function RaceDetail() {
   const [searchParams] = useSearchParams()
   const program = searchParams.get('program') ?? ''
   const [programs, setPrograms] = useState<string[]>([])
-  const [selProgram, setSelProgram] = useState(program)
+  const [selProgram, setSelProgram] = useState(program || 'PTS4 Men')
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getRace>> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -272,14 +272,9 @@ export default function RaceDetail() {
   }, [])
 
   useEffect(() => {
-    if (!raceId) return
-    const prog = selProgram || (programs.includes('PTS4 Men') ? 'PTS4 Men' : (programs[0] ?? ''))
-    if (!prog) {
-      setLoading(false)
-      return
-    }
+    if (!raceId || !selProgram) return
     setLoading(true)
-    api.getRace(Number(raceId), prog)
+    api.getRace(Number(raceId), selProgram)
       .then((d) => {
         setData(d)
         if ('results' in d) {
@@ -288,7 +283,7 @@ export default function RaceDetail() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [raceId, selProgram, programs.length])
+  }, [raceId, selProgram])
 
   useEffect(() => {
     if (program && !selProgram) setSelProgram(program)

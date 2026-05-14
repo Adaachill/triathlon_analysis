@@ -104,7 +104,7 @@ const FLAG_LABEL: Record<RaceChangeFlag, string> = {
 
 export default function WorldRanking() {
   const [programs, setPrograms] = useState<string[]>([])
-  const [program, setProgram] = useState('')
+  const [program, setProgram] = useState('PTS4 Men')
   const [dateMode, setDateMode] = useState<DateMode>('direct')
   const [directDate, setDirectDate] = useState(todayStr())
   const [upcomingEvents, setUpcomingEvents] = useState<AlgoliaEvent[]>([])
@@ -129,7 +129,9 @@ export default function WorldRanking() {
   useEffect(() => {
     api.getPrograms().then((r) => {
       setPrograms(r.programs)
-      setProgram(r.programs[0] ?? '')
+      setProgram((prev) =>
+        r.programs.includes(prev) ? prev : (r.programs[0] ?? '')
+      )
     })
   }, [])
 
