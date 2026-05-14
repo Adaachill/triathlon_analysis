@@ -11,7 +11,7 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 ---
 
 ## 2026-05-14: BumpChartのランタイムクラッシュ修正
-**コミット:** `TBD`
+**コミット:** `ef8aad0`
 **ブランチ:** claude/fix-bumpchart-page-crash-aB9x
 
 ### 変更内容
