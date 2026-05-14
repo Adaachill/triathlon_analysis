@@ -10,6 +10,31 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-14: BumpChartのランタイムクラッシュ修正
+**コミット:** `ef8aad0`
+**ブランチ:** claude/fix-bumpchart-page-crash-aB9x
+
+### 変更内容
+- `frontend/src/pages/BumpChart.tsx`: 防御的エラーハンドリングを追加
+
+### 変更意図・背景
+PR #47 マージ後、レースページ・予想リザルトページが "load failed" 表示になり表示不能に。
+いずれもBumpChartをインポートするページのみ影響を受けており、BumpChartのランタイムエラーが
+Reactコンポーネントツリーのアンマウントを引き起こしていた可能性が高い。
+
+### 技術的決定事項
+- `containerWidth <= 0` のガード追加: SVGコンテナの描画前（非表示状態など）でのD3処理をスキップ
+- `pathEl.node() as SVGPathElement | null` の null チェック追加
+- `getTotalLength()` を try-catch でラップ: Safari（特にiOS）でパスが未描画状態のSVGに
+  appendされた直後に `getTotalLength()` を呼び出すとDOMExceptionを投げることがある既知の問題に対処
+- `totalLen === 0` の場合は dash アニメーションをスキップ（パスが有効でも長さ0なら不要）
+
+### 残課題・次のステップ
+- ResizeObserver でウィンドウリサイズ時の再描画対応
+- エラーバウンダリ追加（より堅牢なエラー分離）
+
+---
+
 ## 2026-05-13: 予想リザルト画面にD3.jsバンプチャートを実装
 **コミット:** `TBD`
 **ブランチ:** claude/improve-results-visualization-7fC6Y
