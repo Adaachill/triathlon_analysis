@@ -10,6 +10,40 @@ git commit logから概要のみ記載。詳細はコミットハッシュで追
 
 ---
 
+## 2026-05-14: ペアワイズ残差による予測精度改善
+**コミット:** `168adf9`
+**ブランチ:** claude/improve-race-prediction-4hoIz
+
+### 変更内容
+- `app/services/als_optimizer.py`: IRLSの外れ値検出をペアワイズ残差ベースに変更
+- `app/services/eval_difficulty.py`: ペアワイズMAE/RMSE・Spearmanランク相関の評価指標を追加
+
+### 変更意図・背景
+従来の評価指標 `error = actual - (strength + difficulty)` はコース難易度の推定精度に左右される。
+レース予測の本質的な目的は「誰が速いか」という選手間の相対評価であり、
+`actual_i - actual_j = strength_i - strength_j`（difficulty がキャンセル）という性質を活かした
+difficulty不依存な指標に切り替えることで、真のホールドアウト評価が可能になる。
+
+### 技術的決定事項
+**アルゴリズム（IRLS改善）:**
+- 個別残差 `|actual - strength - difficulty|` から同一レース内のペアワイズ残差
+  `mean(|res_i - res_j| for j ≠ i in same race)` に変更
+- difficulty 推定誤差が混入しないため、難易度推定が難しいレース（参加者少数等）での
+  誤った外れ値検出を抑制できる
+- 同一レース内に他選手がいない場合は個別残差にフォールバック
+
+**評価（eval_difficulty.py）:**
+- `pairwise_summary`: 全ペア（i,j）について `|(actual_i-actual_j) - (strength_i-strength_j)|` のMAE/RMSE
+- `pairwise_by_segment`: セグメント別ペアワイズ誤差（swim/t1/bike/t2/run）
+- `rank_correlation`: プログラム×レースごとのSpearman ρ の平均
+- これらはdifficultyへのアクセスを一切不要とするため、真のホールドアウト評価になる
+
+### 残課題・次のステップ
+- `evaluate_halflife_comparison` にもペアワイズ指標を追加すると最適半減期の選択がより正確になる可能性
+- ペアワイズIRLSの計算コストはO(n²/race)のため、参加者が多いレースでの影響を計測・調整する余地あり
+
+---
+
 ## 2026-05-14: BumpChartのランタイムクラッシュ修正
 **コミット:** `ef8aad0`
 **ブランチ:** claude/fix-bumpchart-page-crash-aB9x
