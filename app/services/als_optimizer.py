@@ -217,25 +217,43 @@ def compute_optimized_unified(
                     for a in prog_data[p]:
                         strength[p][a][f] += mean_d
 
-        # d. IRLS 外れ値検出（プログラム別、total_sec 残差）
+        # d. IRLS 外れ値検出（プログラム別、ペアワイズ残差）
+        # ペアワイズ残差 res_i - res_j は difficulty がキャンセルされるため
+        # difficulty 推定誤差の影響を受けない外れ値検出が可能。
         for p in programs:
-            abs_res: list[float] = []
-            pairs: list[tuple[str, int]] = []
+            # まず各(選手, レース)の個別残差を収集
+            race_residuals: dict[int, dict[str, float]] = {}
             for a in prog_data[p]:
                 for r in prog_data[p][a]:
                     if "total_sec" in prog_data[p][a][r]:
                         res = prog_data[p][a][r]["total_sec"] - (
                             strength[p][a]["total_sec"] + diff[r]["total_sec"]
                         )
-                        abs_res.append(abs(res))
-                        pairs.append((a, r))
-            if abs_res:
-                n = len(abs_res)
-                s = sorted(abs_res)
+                        race_residuals.setdefault(r, {})[a] = res
+
+            # 各(選手, レース)のペアワイズ外れ値スコア = 同レース他選手との残差差の平均絶対値
+            pairwise_scores: list[float] = []
+            score_pairs: list[tuple[str, int]] = []
+            for r, ath_res in race_residuals.items():
+                ath_list = list(ath_res.keys())
+                for a in ath_list:
+                    others = [ath_res[b] for b in ath_list if b != a]
+                    if others:
+                        score = sum(abs(ath_res[a] - rb) for rb in others) / len(others)
+                        pairwise_scores.append(score)
+                        score_pairs.append((a, r))
+                    else:
+                        # 同レースに他選手がいない場合は個別残差にフォールバック
+                        pairwise_scores.append(abs(ath_res[a]))
+                        score_pairs.append((a, r))
+
+            if pairwise_scores:
+                n = len(pairwise_scores)
+                s = sorted(pairwise_scores)
                 mad = s[n // 2] if n % 2 == 1 else (s[n // 2 - 1] + s[n // 2]) / 2
                 thr = outlier_k * mad * 1.4826
-                for (a, r), ar in zip(pairs, abs_res):
-                    ow[p][a][r] = max(min_weight, thr / ar) if thr > 0 and ar > thr else 1.0
+                for (a, r), score in zip(score_pairs, pairwise_scores):
+                    ow[p][a][r] = max(min_weight, thr / score) if thr > 0 and score > thr else 1.0
 
         # e. 早期終了チェック（tol > 0 のときのみ）
         if tol > 0:
