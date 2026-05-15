@@ -12,10 +12,39 @@ import WorldRanking from './pages/WorldRanking'
 import WtImport from './pages/WtImport'
 import { warmupBackend } from './warmup'
 
+type Theme = 'light' | 'dark' | 'system'
+
+function readTheme(): Theme {
+  if (typeof window === 'undefined') return 'system'
+  const stored = window.localStorage.getItem('theme') as Theme | null
+  return stored === 'light' || stored === 'dark' ? stored : 'system'
+}
+
+function applyTheme(t: Theme) {
+  const root = document.documentElement
+  if (t === 'system') root.removeAttribute('data-theme')
+  else root.setAttribute('data-theme', t)
+}
+
+const BOTTOM_TABS = [
+  { to: '/',          label: 'ホーム',     icon: '📖', end: true  },
+  { to: '/rankings',  label: 'ランキング', icon: '🏆', end: false },
+  { to: '/races',     label: 'レース',     icon: '🏁', end: false },
+  { to: '/predict',   label: '予想',       icon: '🔮', end: false },
+] as const
+
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const navRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
+  const [theme, setTheme] = useState<Theme>(() => readTheme())
+
+  // Apply theme on mount and change
+  useEffect(() => {
+    applyTheme(theme)
+    if (theme === 'system') window.localStorage.removeItem('theme')
+    else window.localStorage.setItem('theme', theme)
+  }, [theme])
 
   // 起動直後にバックエンドを温める（Render スリープ復帰の30〜60秒を裏で消化）
   useEffect(() => { warmupBackend() }, [])
@@ -34,6 +63,13 @@ function App() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [menuOpen])
+
+  const cycleTheme = () => {
+    setTheme((cur) => cur === 'light' ? 'dark' : cur === 'dark' ? 'system' : 'light')
+  }
+
+  const themeIcon = theme === 'light' ? '☀️' : theme === 'dark' ? '🌙' : '🌓'
+  const themeTitle = theme === 'light' ? 'ライトモード' : theme === 'dark' ? 'ダークモード' : 'システム設定に従う'
 
   const navLinks = (
     <>
@@ -71,10 +107,20 @@ function App() {
           {navLinks}
         </nav>
 
-        {/* Mobile hamburger */}
+        {/* Theme toggle */}
+        <button
+          className="theme-toggle"
+          onClick={cycleTheme}
+          title={`テーマ: ${themeTitle}（クリックで切替）`}
+          aria-label="テーマを切り替え"
+        >
+          <span aria-hidden>{themeIcon}</span>
+        </button>
+
+        {/* Mobile overflow menu (drawer trigger) */}
         <button
           className={`hamburger${menuOpen ? ' hamburger-open' : ''}`}
-          aria-label="メニュー"
+          aria-label="その他メニュー"
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen((v) => !v)}
         >
@@ -82,7 +128,7 @@ function App() {
         </button>
       </header>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer (overflow links: その他項目) */}
       {menuOpen && <div className="nav-overlay" onClick={() => setMenuOpen(false)} />}
       <div ref={navRef} className={`nav-drawer${menuOpen ? ' nav-drawer-open' : ''}`}>
         <nav className="nav-drawer-links">
@@ -104,6 +150,23 @@ function App() {
           <Route path="/world-ranking" element={<WorldRanking />} />
         </Routes>
       </main>
+
+      {/* モバイル下部ボトムタブバー */}
+      <nav className="bottom-tabs" aria-label="メイン">
+        <div className="bottom-tabs-inner">
+          {BOTTOM_TABS.map((t) => (
+            <NavLink
+              key={t.to}
+              to={t.to}
+              end={t.end}
+              className={({ isActive }) => `bottom-tab${isActive ? ' active' : ''}`}
+            >
+              <span className="bottom-tab-icon" aria-hidden>{t.icon}</span>
+              <span className="bottom-tab-label">{t.label}</span>
+            </NavLink>
+          ))}
+        </div>
+      </nav>
     </div>
   )
 }
