@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, LabelList } from 'recharts'
 import { api, formatTime, formatDiff, getCountryFlag } from '../api'
 import type { RaceResult } from '../api'
 import BumpChart, { type BumpAthleteInput } from './BumpChart'
+import { LoadingState } from '../components/Loading'
 import './pages.css'
 
 type ViewMode = 'actual' | 'standard'
@@ -301,7 +302,7 @@ export default function RaceDetail() {
   }
 
   if (error) return <div className="error">{error}</div>
-  if (loading && !data) return <div className="loading">読み込み中...</div>
+  if (loading && !data) return <LoadingState variant="page" />
   if (data && 'error' in data) return <div className="error">{(data as { error: string }).error}</div>
   if (!data) return null
 

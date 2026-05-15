@@ -7,6 +7,7 @@ import {
 import { api, formatTime, formatDiff, getCountryFlag } from '../api'
 import type { AthleteRace, RankingEntry } from '../api'
 import { GrowthCards, SegmentRadar } from '../components/GrowthRadar'
+import { LoadingState } from '../components/Loading'
 import './pages.css'
 
 const DAYS = 86400000
@@ -128,7 +129,7 @@ function AthleteCumulativeChart({ races }: { races: AthleteRace[] }) {
                   return [formatTime(v), seg ? `${seg.icon} ${seg.label}` : name]
                 }}
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', fontSize: '0.82rem', borderRadius: '8px' }}
-                cursor={{ fill: 'rgba(30,107,186,0.06)' }}
+                curso={{ fill: 'rgba(30,107,186,0.06)' }}
               />
               {SEG_CONFIG.map((seg, i) => (
                 <Bar key={seg.key as string} dataKey={seg.key as string} stackId="a" fill={seg.color}
@@ -273,7 +274,7 @@ export default function AthleteDetail() {
   }
 
   if (error) return <div className="error">{error}</div>
-  if (loading && !data) return <div className="loading">読み込み中...</div>
+  if (loading && !data) return <LoadingState variant="page" />
   if (data && 'error' in data) return <div className="error">{(data as { error: string }).error}</div>
   if (!data) return null
 

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { api } from '../api'
-import type { EvalResult } from '../api'
+import { api, getUpcomingEvents } from '../api'
+import type { EvalResult, Race, StatsResponse, AlgoliaEvent } from '../api'
+import { TriathlonSpinner } from '../components/Loading'
 import './Guide.css'
 
 const MODEL_LABELS: Record<string, string> = {
@@ -221,63 +222,315 @@ function EvalSection() {
   )
 }
 
+/** 数値カウントアップ表示 */
+function CountUp({ value, duration = 800 }: { value: number | null; duration?: number }) {
+  const [display, setDisplay] = useState(0)
+  useEffect(() => {
+    if (value == null) return
+    const start = performance.now()
+    const from = 0
+    const to = value
+    let raf = 0
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - t, 3)
+      setDisplay(Math.round(from + (to - from) * eased))
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [value, duration])
+  if (value == null) return <span className="stat-num-placeholder">—</span>
+  return <span>{display.toLocaleString()}</span>
+}
+
+function StatsHero() {
+  const [stats, setStats] = useState<StatsResponse | null>(null)
+  const [warming, setWarming] = useState(true)
+
+  useEffect(() => {
+    setWarming(true)
+    api.getStats()
+      .then(setStats)
+      .catch(() => {})
+      .finally(() => setWarming(false))
+  }, [])
+
+  const lastDate = stats?.last_race_date
+    ? new Date(stats.last_race_date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' })
+    : '—'
+
+  return (
+    <div className="guide-hero guide-hero-rich">
+      <div className="guide-hero-spinner-wrap">
+        <TriathlonSpinner size={72} />
+      </div>
+      <div className="guide-hero-text">
+        <h2 className="guide-hero-title">パラトライアスロン 分析ツール</h2>
+        <p className="guide-hero-sub">
+          World Triathlon 公式記録から、選手の実力・コース難易度・予想タイムをデータで可視化。
+        </p>
+        <div className="guide-hero-stats">
+          <div className="guide-hero-stat">
+            <div className="stat-num"><CountUp value={stats?.race_count ?? null} /></div>
+            <div className="stat-label">登録レース</div>
+          </div>
+          <div className="guide-hero-stat">
+            <div className="stat-num"><CountUp value={stats?.athlete_count ?? null} /></div>
+            <div className="stat-label">分析対象選手</div>
+          </div>
+          <div className="guide-hero-stat">
+            <div className="stat-num"><CountUp value={stats?.result_count ?? null} /></div>
+            <div className="stat-label">レース結果</div>
+          </div>
+          <div className="guide-hero-stat">
+            <div className="stat-num-text">{lastDate}</div>
+            <div className="stat-label">最新レース</div>
+          </div>
+        </div>
+        {warming && (
+          <p className="guide-hero-warming">
+            サーバーを起動中… 30〜60秒ほどお待ちください（その間にも下のセクションは閲覧できます）
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RecentAndUpcoming() {
+  const [recent, setRecent] = useState<Race[] | null>(null)
+  const [upcoming, setUpcoming] = useState<AlgoliaEvent[] | null>(null)
+
+  useEffect(() => {
+    api.getRaces()
+      .then((races) => {
+        const sorted = [...races]
+          .filter(r => r.date)
+          .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+          .slice(0, 4)
+        setRecent(sorted)
+      })
+      .catch(() => setRecent([]))
+    getUpcomingEvents(120)
+      .then(evs => setUpcoming(evs.slice(0, 4)))
+      .catch(() => setUpcoming([]))
+  }, [])
+
+  const fmtDate = (d: string | null) => {
+    if (!d) return '—'
+    const dt = new Date(d)
+    return `${dt.getMonth() + 1}月${dt.getDate()}日`
+  }
+
+  return (
+    <div className="card guide-cards-row">
+      <div className="guide-cards-col">
+        <h3 className="guide-section-title">🏁 直近のレース</h3>
+        {recent == null ? (
+          <div className="guide-recent-loading">読み込み中…</div>
+        ) : recent.length === 0 ? (
+          <p className="guide-empty">まだデータがありません</p>
+        ) : (
+          <div className="guide-mini-list">
+            {recent.map(r => (
+              <Link key={r.id} to={`/races/${r.id}`} className="guide-mini-row">
+                <span className="guide-mini-date">{fmtDate(r.date)}</span>
+                <span className="guide-mini-name">{r.name || `Race ${r.event_id}`}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+        <Link to="/races" className="guide-cards-more">すべて見る →</Link>
+      </div>
+
+      <div className="guide-cards-col">
+        <h3 className="guide-section-title">📅 近日開催 (公式WT)</h3>
+        {upcoming == null ? (
+          <div className="guide-recent-loading">読み込み中…</div>
+        ) : upcoming.length === 0 ? (
+          <p className="guide-empty">予定されたレースが見つかりませんでした</p>
+        ) : (
+          <div className="guide-mini-list">
+            {upcoming.map(ev => (
+              <a
+                key={ev.id}
+                href={`https://www.triathlon.org/events/event/${ev.id}`}
+                target="_blank" rel="noreferrer"
+                className="guide-mini-row"
+              >
+                <span className="guide-mini-date">{fmtDate(ev.start_date)}</span>
+                <span className="guide-mini-name">{ev.name}</span>
+                <span className="guide-mini-loc">{ev.city ?? ev.country_name}</span>
+              </a>
+            ))}
+          </div>
+        )}
+        <Link to="/admin/wt-import" className="guide-cards-more">過去大会の自動取込 →</Link>
+      </div>
+    </div>
+  )
+}
+
+const PERSONAS = [
+  {
+    icon: '🏃',
+    title: '選手として使う',
+    color: '#16a34a',
+    bullets: [
+      <>
+        自分の<Link to="/rankings">強さランキング</Link> でカテゴリ内の現在地を確認
+      </>,
+      <>
+        個人ページでセグメント別の強み・弱みと、過去365日 vs 366〜730日前の<strong>成長トレンド</strong>を比較
+      </>,
+      <>
+        <Link to="/predict">予想リザルト</Link> に次戦のスタートリストを入れて、目標タイム・想定順位を逆算
+      </>,
+    ],
+  },
+  {
+    icon: '🧠',
+    title: 'コーチ・スカウト視点で使う',
+    color: '#1e6bba',
+    bullets: [
+      <>
+        <Link to="/rankings">セグメント別ランキング</Link>で「Bike が強いがRunで失速する選手」を発見
+      </>,
+      <>
+        各レース詳細の<strong>逆転（↑↓）</strong>列で、コース・気象適性と「番狂わせ傾向」を確認
+      </>,
+      <>
+        <Link to="/world-ranking">世界ランク試算</Link>で代表選考・派遣戦略の根拠データを取得
+      </>,
+    ],
+  },
+  {
+    icon: '📺',
+    title: 'ファン・観戦者として楽しむ',
+    color: '#f59e0b',
+    bullets: [
+      <>
+        <Link to="/races">レース一覧</Link>から気になる大会の累積セグメントチャートで展開を追体験
+      </>,
+      <>
+        順位変動<strong>バンプチャート</strong>で「誰がどこで抜いたか」を視覚的に把握
+      </>,
+      <>
+        予想タイムと実タイムの差分から「番狂わせの神回」レースを探す
+      </>,
+    ],
+  },
+]
+
+function PersonaSection() {
+  return (
+    <div className="card">
+      <h3 className="guide-section-title">🎯 使い方（3つの視点で）</h3>
+      <p className="guide-persona-intro">
+        立場によって価値が違うツールです。自分の目的に近いタブを選んでください。
+      </p>
+      <div className="guide-persona-grid">
+        {PERSONAS.map((p, i) => (
+          <div key={i} className="guide-persona-card" style={{ borderTopColor: p.color }}>
+            <div className="guide-persona-header">
+              <span className="guide-persona-icon">{p.icon}</span>
+              <span className="guide-persona-title">{p.title}</span>
+            </div>
+            <ul className="guide-persona-bullets">
+              {p.bullets.map((b, j) => <li key={j}>{b}</li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const FAQS: { q: string; a: React.ReactNode }[] = [
+  {
+    q: '最初のアクセスがとても遅いのはなぜ？',
+    a: (
+      <>
+        無料のホスティング (Render) を使っており、しばらくアクセスが無いとサーバーが自動でスリープします。
+        スリープ復帰には 30〜60秒かかります。ページを開いた瞬間に裏で起動を始めるので、待っていれば自動で表示されます。
+      </>
+    ),
+  },
+  {
+    q: 'データはどこから取得していますか？',
+    a: (
+      <>
+        World Triathlon の公式リザルト（Excel）を <Link to="/admin/wt-import">データ取得</Link>{' '}
+        ページから自動でインポートしています。Algolia の公開検索 API も併用しています。
+      </>
+    ),
+  },
+  {
+    q: '「強さスコア」が同じカテゴリでも数値の桁が違うのはなぜ？',
+    a: (
+      <>
+        基準レースに対する標準化タイム（秒）です。レース距離（スプリント / オリンピック等）が違うと自然と桁も変わります。
+        ランキングはカテゴリ内（≒同距離）でのみ比較してください。
+      </>
+    ),
+  },
+  {
+    q: '予想と実タイムがズレるのは？',
+    a: (
+      <>
+        天候、当日のコンディション、レースペース戦略、機材トラブル、また新コース・新規選手は予測誤差が大きくなります。
+        「予測精度チェック」セクションでカテゴリ別のMAE（平均誤差）を確認できます。
+      </>
+    ),
+  },
+  {
+    q: '逆転 (↑3 / ↓2) の意味は？',
+    a: (
+      <>
+        「強さスコアから予想される順位」と「実際の順位」の差です。↑3 は予想より3つ上、↓2 は2つ下。
+        プラスは当日好調・戦略成功、マイナスはアクシデント・コース不適応を示唆します。
+      </>
+    ),
+  },
+  {
+    q: '自分の選手データを追加してほしい',
+    a: (
+      <>
+        World Triathlon に公式レース結果が掲載されていれば、<Link to="/admin/wt-import">データ取得</Link>{' '}
+        ページから誰でも取り込めます。掲載されていない非公式レースは現状サポート外です。
+      </>
+    ),
+  },
+]
+
+function FaqSection() {
+  return (
+    <div className="card">
+      <h3 className="guide-section-title">❓ よくある質問</h3>
+      <div className="guide-faq-list">
+        {FAQS.map((item, i) => (
+          <details key={i} className="guide-term">
+            <summary className="guide-term-title">{item.q}</summary>
+            <div className="guide-term-body"><p>{item.a}</p></div>
+          </details>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Guide() {
   return (
     <div className="guide-page">
+      {/* ヒーロー（統計ダッシュボード） */}
+      <StatsHero />
 
-      {/* サーバー起動通知 */}
-      <div className="guide-server-notice">
-        <strong>⏱ 初回アクセス・久しぶりのアクセスについて</strong>
-        <p>
-          サーバーは一定時間アクセスがないとスリープ状態になります。
-          再起動に <strong>30秒ほど</strong> かかるため、最初にページを開いた際に
-          データが表示されない・エラーが出る場合があります。
-          しばらく待ってからページを再読み込みしてください。
-        </p>
-      </div>
+      {/* 直近レース & 近日開催 */}
+      <RecentAndUpcoming />
 
-      {/* ヒーロー */}
-      <div className="guide-hero">
-        <h2 className="guide-hero-title">パラトライアスロン 分析ツール</h2>
-        <p className="guide-hero-sub">
-          World Triathlon 公式記録をもとに、選手の実力・レース難易度・予想タイムをデータで可視化します。
-        </p>
-      </div>
-
-      {/* クイックスタート */}
-      <div className="card">
-        <h3 className="guide-section-title">はじめかた</h3>
-        <div className="guide-steps">
-          <div className="guide-step">
-            <div className="guide-step-num">1</div>
-            <div>
-              <div className="guide-step-label"><Link to="/races">レース一覧</Link> を開く</div>
-              <p className="guide-step-desc">過去・直近のパラトライアスロンレースが日付順に並んでいます。気になる大会をクリックしてください。</p>
-            </div>
-          </div>
-          <div className="guide-step">
-            <div className="guide-step-num">2</div>
-            <div>
-              <div className="guide-step-label">カテゴリを選んで結果を確認</div>
-              <p className="guide-step-desc">結果ページ右上のプルダウンでカテゴリ（例: PTS4 Men）を切り替えられます。「表示」プルダウンで実タイム・標準化タイム・予想とのギャップを切り替えできます。</p>
-            </div>
-          </div>
-          <div className="guide-step">
-            <div className="guide-step-num">3</div>
-            <div>
-              <div className="guide-step-label"><Link to="/rankings">ランキング</Link> で選手の実力を比較</div>
-              <p className="guide-step-desc">複数レースを横断した「強さスコア」で選手をランキング。選手名をクリックすると個人の成績推移を確認できます。</p>
-            </div>
-          </div>
-          <div className="guide-step">
-            <div className="guide-step-num">4</div>
-            <div>
-              <div className="guide-step-label"><Link to="/predict">予想リザルト</Link> で未来のレースをシミュレート</div>
-              <p className="guide-step-desc">エントリーリスト（Excel）をアップロードすると、選手の強さスコアとレース難易度から予想タイム・予想順位を自動計算します。</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* ペルソナ別ユースケース */}
+      <PersonaSection />
 
       {/* 用語解説 */}
       <div className="card">
@@ -385,8 +638,16 @@ export default function Guide() {
             <div className="guide-feature-name">予想リザルト</div>
             <p className="guide-feature-desc">エントリーリストから予想順位・予想タイムを自動生成。</p>
           </Link>
+          <Link to="/admin/wt-import" className="guide-feature-card">
+            <div className="guide-feature-icon">📥</div>
+            <div className="guide-feature-name">データ取得</div>
+            <p className="guide-feature-desc">World Triathlon 公式の過去大会を自動取込。</p>
+          </Link>
         </div>
       </div>
+
+      {/* FAQ */}
+      <FaqSection />
 
     </div>
   )
