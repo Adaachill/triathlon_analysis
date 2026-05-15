@@ -69,6 +69,47 @@
   font-variant-numeric: tabular-nums;
 }
 
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sortable-th:hover {
+  color: var(--accent);
+}
+
+.sortable-th.sort-active {
+  color: var(--accent);
+}
+
+.sort-arrow {
+  font-size: 0.7em;
+  opacity: 0.6;
+}
+
+.sortable-th.sort-active .sort-arrow {
+  opacity: 1;
+}
+
+.seg-cell {
+  white-space: nowrap;
+}
+
+.sort-active-cell {
+  background: var(--bg-hover);
+}
+
+.seg-time {
+  margin-right: 0.2rem;
+}
+
+.seg-rank {
+  font-size: 0.72em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .race-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

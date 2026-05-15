@@ -9,16 +9,39 @@ from app.services.als_optimizer import get_optimized_program, compute_optimized_
 router = APIRouter(prefix="/rankings", tags=["rankings"])
 
 
+_SORT_KEY_MAP = {
+    "total": "strength",
+    "swim": "strength_swim",
+    "t1": "strength_t1",
+    "bike": "strength_bike",
+    "t2": "strength_t2",
+    "run": "strength_run",
+}
+
+_SEG_RANK_MAP = {
+    "strength": "rank",
+    "strength_swim": "rank_swim",
+    "strength_t1": "rank_t1",
+    "strength_bike": "rank_bike",
+    "strength_t2": "rank_t2",
+    "strength_run": "rank_run",
+}
+
+
 @router.get("/top")
 async def get_top_athletes(
     program_name: str = Query(..., description="Program Name（必須）"),
     limit: int = Query(50, ge=1, le=500, description="取得件数"),
+    sort_by: str = Query("total", description="ソート対象セグメント: total|swim|t1|bike|t2|run"),
     session: Session = Depends(get_db),
 ):
     """
     強さランキング（ALS最適化による strength が短い順）
+    sort_by で各セグメントごとのソートが可能。各選手の全セグメント順位を返す。
     """
-    # ALS 最適化で全選手の strength を一括取得
+    if sort_by not in _SORT_KEY_MAP:
+        sort_by = "total"
+
     opt = get_optimized_program(session, program_name)
     athlete_strengths = opt["athlete_strengths"]
 
@@ -36,12 +59,12 @@ async def get_top_athletes(
                 "country": r.country,
             }
 
-    # ランキングを組み立て
-    rankings = []
+    # 全選手でランキングを組み立て
+    all_rankings = []
     for athlete_id, s_data in athlete_strengths.items():
         if s_data.get("strength") is not None:
             info = name_by_id.get(athlete_id, {})
-            rankings.append({
+            all_rankings.append({
                 "athlete_id": athlete_id,
                 "first_name": info.get("first_name", ""),
                 "last_name": info.get("last_name", ""),
@@ -54,11 +77,24 @@ async def get_top_athletes(
                 "strength_run": s_data.get("strength_run"),
             })
 
-    # strength 昇順（タイムが短い順）にソート
-    rankings.sort(key=lambda x: x["strength"])
+    # 全選手を対象に各セグメントの順位を計算
+    for seg_key, rank_key in _SEG_RANK_MAP.items():
+        indexed = [(i, r[seg_key]) for i, r in enumerate(all_rankings) if r.get(seg_key) is not None]
+        indexed.sort(key=lambda x: x[1])
+        ranked_indices = set()
+        for rank_pos, (i, _) in enumerate(indexed, 1):
+            all_rankings[i][rank_key] = rank_pos
+            ranked_indices.add(i)
+        for i in range(len(all_rankings)):
+            if i not in ranked_indices:
+                all_rankings[i][rank_key] = None
+
+    # 指定セグメントでソートし上位 limit 件を返す
+    sort_key = _SORT_KEY_MAP[sort_by]
+    all_rankings.sort(key=lambda x: (x.get(sort_key) is None, x.get(sort_key) or 0))
 
     return JSONResponse(
-        content={"program_name": program_name, "rankings": rankings[:limit]},
+        content={"program_name": program_name, "rankings": all_rankings[:limit]},
         headers={"Cache-Control": "public, max-age=300"},
     )
 

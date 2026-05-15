@@ -1,5 +1,26 @@
 # 開発履歴
 
+## 2026-05-15: ランキングのセグメント別ソート＆順位表示
+**コミット:** `(本PR)`
+**ブランチ:** claude/segment-ranking-leaderboard-zZMtg
+
+### 変更内容
+- `app/routers/rankings.py`: `sort_by` クエリパラメータ追加（`total|swim|t1|bike|t2|run`）、全選手を対象に各セグメントの順位を計算して`rank`/`rank_swim`/`rank_t1`/`rank_bike`/`rank_t2`/`rank_run` フィールドをレスポンスに含める
+- `frontend/src/api.ts`: `RankingEntry` に `rank*` フィールドを追加、`getRankings` に `sortBy` 引数を追加、`RankingSortBy` 型をエクスポート
+- `frontend/src/pages/Rankings.tsx`: 列ヘッダークリックでセグメントソート切り替え、各セグメント値の横に `#N` 形式で順位バッジ表示、アクティブ列をハイライト
+- `frontend/src/pages/pages.css`: ソート関連スタイル（`.sortable-th`, `.sort-active-cell`, `.seg-rank` 等）追加
+
+### 変更意図・背景
+ランキング表で「このアスリートはSwimが何位か」をひと目で確認したいというニーズに対応。また、特定セグメントの上位選手を発見できるよう、セグメントでの全体ソートも可能にした。
+
+### 技術的決定事項
+- セグメント順位は API 側で全選手を対象に計算し返す（フロント側でソートすると limit 内だけの順位になる問題を回避）
+- ソート変更時に `sort_by` を変えて再フェッチする方式（バックエンドが返す上位 N 件がそのセグメントの本当の上位になる）
+- 型安全のため `Record<string, unknown>` キャストを避け、`switch` で各プロパティに直接アクセス
+
+### 残課題・次のステップ
+- ソート降順（遅い順）のトグルは未実装（通常は昇順のみで十分）
+
 ## 2026-05-15: レース結果UIの全面改善
 **コミット:** `(本PR)`
 **ブランチ:** claude/improve-race-results-ui-bJ5DW

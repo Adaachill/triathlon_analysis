@@ -144,6 +144,8 @@ export interface RaceDetail {
   results: RaceResult[];
 }
 
+export type RankingSortBy = 'total' | 'swim' | 't1' | 'bike' | 't2' | 'run'
+
 export interface RankingEntry {
   athlete_id: string;
   first_name: string;
@@ -155,6 +157,12 @@ export interface RankingEntry {
   strength_bike?: number | null;
   strength_t2?: number | null;
   strength_run?: number | null;
+  rank?: number | null;
+  rank_swim?: number | null;
+  rank_t1?: number | null;
+  rank_bike?: number | null;
+  rank_t2?: number | null;
+  rank_run?: number | null;
 }
 
 export interface RankingsResponse {
@@ -459,8 +467,8 @@ export const api = {
     fetchApi<RaceDetail>(`/races/${id}`, programName ? { program_name: programName } : undefined),
   updateRace: (id: number, body: RaceUpdateBody) =>
     patchApi<{ race: Race }>(`/races/${id}`, body),
-  getRankings: (programName: string, limit = 50) =>
-    fetchApi<RankingsResponse>('/rankings/top', { program_name: programName, limit: String(limit) }),
+  getRankings: (programName: string, limit = 50, sortBy: RankingSortBy = 'total') =>
+    fetchApi<RankingsResponse>('/rankings/top', { program_name: programName, limit: String(limit), sort_by: sortBy }),
   getRankingsDiff: (programName: string, newRaceId: number) =>
     fetchApi<RankingsDiffResponse>('/rankings/diff', { program_name: programName, new_race_id: String(newRaceId) }),
   getAthlete: (athleteId: string, programName: string) =>

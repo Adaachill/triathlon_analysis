@@ -1,12 +1,24 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { api, formatTime, getCountryFlag } from '../api'
+import { api, formatTime, getCountryFlag, type RankingSortBy } from '../api'
 import './pages.css'
+
+type SortConfig = { key: RankingSortBy; label: string; strengthKey: string; rankKey: string }
+
+const SORT_CONFIGS: SortConfig[] = [
+  { key: 'total', label: 'Total',  strengthKey: 'strength',      rankKey: 'rank'      },
+  { key: 'swim',  label: 'Swim',   strengthKey: 'strength_swim', rankKey: 'rank_swim' },
+  { key: 't1',    label: 'T1',     strengthKey: 'strength_t1',   rankKey: 'rank_t1'   },
+  { key: 'bike',  label: 'Bike',   strengthKey: 'strength_bike', rankKey: 'rank_bike' },
+  { key: 't2',    label: 'T2',     strengthKey: 'strength_t2',   rankKey: 'rank_t2'   },
+  { key: 'run',   label: 'Run',    strengthKey: 'strength_run',  rankKey: 'rank_run'  },
+]
 
 export default function Rankings() {
   const [programs, setPrograms] = useState<string[]>([])
   const [program, setProgram] = useState('PTS4 Men')
+  const [sortBy, setSortBy] = useState<RankingSortBy>('total')
   const [data, setData] = useState<Awaited<ReturnType<typeof api.getRankings>> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -26,27 +38,55 @@ export default function Rankings() {
   useEffect(() => {
     if (!program) return
     setLoading(true)
-    api.getRankings(program)
+    api.getRankings(program, 50, sortBy)
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [program])
+  }, [program, sortBy])
 
   if (error) return <div className="error">{error}</div>
   if (loading && !data) return <div className="loading">読み込み中...</div>
 
+  const activeConfig = SORT_CONFIGS.find((c) => c.key === sortBy) ?? SORT_CONFIGS[0]
+
+  function getSegTime(r: import('../api').RankingEntry, key: RankingSortBy): number | null | undefined {
+    switch (key) {
+      case 'total': return r.strength
+      case 'swim':  return r.strength_swim
+      case 't1':    return r.strength_t1
+      case 'bike':  return r.strength_bike
+      case 't2':    return r.strength_t2
+      case 'run':   return r.strength_run
+    }
+  }
+
+  function getSegRank(r: import('../api').RankingEntry, key: RankingSortBy): number | null | undefined {
+    switch (key) {
+      case 'total': return r.rank
+      case 'swim':  return r.rank_swim
+      case 't1':    return r.rank_t1
+      case 'bike':  return r.rank_bike
+      case 't2':    return r.rank_t2
+      case 'run':   return r.rank_run
+    }
+  }
+
   const chartData = data?.rankings.slice(0, 15).map((r, i) => ({
     name: `${r.first_name} ${r.last_name}`.trim() || r.athlete_id,
-    time: r.strength,
+    time: getSegTime(r, activeConfig.key) ?? null,
     fullName: `${r.first_name} ${r.last_name}`.trim(),
     rank: i + 1,
-  })) ?? []
+  })).filter((d) => d.time != null) ?? []
+
+  function handleSortChange(key: RankingSortBy) {
+    if (key !== sortBy) setSortBy(key)
+  }
 
   return (
     <div className="rankings-page">
       <div className="card">
         <div className="page-header">
-          <h2>強さランキング（標準化Total平均）</h2>
+          <h2>強さランキング（標準化タイム平均）</h2>
           <select value={program} onChange={(e) => setProgram(e.target.value)}>
             {programs.map((p) => (
               <option key={p} value={p}>{p}</option>
@@ -56,6 +96,7 @@ export default function Rankings() {
 
         <p className="desc">
           基準レースとの比較で補正した標準化タイムの平均が短い順。レース難易度を考慮した実力指標。
+          列ヘッダーをクリックするとそのセグメントでソートできます。
         </p>
 
         {chartData.length > 0 && (
@@ -90,12 +131,16 @@ export default function Rankings() {
                 <th>順位</th>
                 <th>選手名</th>
                 <th>国</th>
-                <th>Total</th>
-                <th>Swim</th>
-                <th>T1</th>
-                <th>Bike</th>
-                <th>T2</th>
-                <th>Run</th>
+                {SORT_CONFIGS.map((c) => (
+                  <th
+                    key={c.key}
+                    className={`sortable-th${sortBy === c.key ? ' sort-active' : ''}`}
+                    onClick={() => handleSortChange(c.key)}
+                  >
+                    {c.label}
+                    <span className="sort-arrow">{sortBy === c.key ? ' ▲' : ' ↕'}</span>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -108,12 +153,18 @@ export default function Rankings() {
                     </Link>
                   </td>
                   <td><span className="country-flag">{getCountryFlag(r.country)}</span>{r.country}</td>
-                  <td className="mono">{formatTime(r.strength)}</td>
-                  <td className="mono">{formatTime(r.strength_swim)}</td>
-                  <td className="mono">{formatTime(r.strength_t1)}</td>
-                  <td className="mono">{formatTime(r.strength_bike)}</td>
-                  <td className="mono">{formatTime(r.strength_t2)}</td>
-                  <td className="mono">{formatTime(r.strength_run)}</td>
+                  {SORT_CONFIGS.map((c) => {
+                    const time = getSegTime(r, c.key)
+                    const segRank = getSegRank(r, c.key)
+                    return (
+                      <td key={c.key} className={`mono seg-cell${sortBy === c.key ? ' sort-active-cell' : ''}`}>
+                        <span className="seg-time">{formatTime(time)}</span>
+                        {segRank != null && (
+                          <span className="seg-rank">#{segRank}</span>
+                        )}
+                      </td>
+                    )
+                  })}
                 </tr>
               ))}
             </tbody>
