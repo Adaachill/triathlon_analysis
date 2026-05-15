@@ -1,0 +1,234 @@
+/* ===== 伸び代カード ===== */
+.growth-section {
+  margin: 1.5rem 0;
+}
+
+.growth-headline {
+  margin-bottom: 0.75rem;
+}
+
+.growth-title {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.growth-summary {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.growth-summary strong {
+  font-weight: 700;
+}
+
+.growth-summary-sep {
+  margin: 0 0.5rem;
+  color: var(--border);
+}
+
+.growth-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.65rem;
+}
+
+.growth-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  position: relative;
+  transition: box-shadow 0.15s, transform 0.1s;
+}
+
+.growth-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.growth-card-opportunity {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.08) 0%, var(--bg-card) 60%);
+}
+
+.growth-card-strength {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, var(--bg-card) 60%);
+}
+
+.growth-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.growth-card-icon {
+  font-size: 1.1rem;
+}
+
+.growth-card-label {
+  font-weight: 700;
+  font-size: 0.92rem;
+  flex: 1;
+}
+
+.growth-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.growth-badge-strength {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+
+.growth-badge-opportunity {
+  background: rgba(251, 191, 36, 0.18);
+  color: #b45309;
+}
+
+.growth-card-time {
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.growth-card-rank {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.growth-card-rank strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.growth-meter {
+  position: relative;
+  height: 8px;
+  background: var(--bg-hover);
+  border-radius: 999px;
+  overflow: visible;
+  margin: 0.15rem 0;
+}
+
+.growth-meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease-out;
+}
+
+.growth-meter-marker {
+  position: absolute;
+  top: -2px;
+  height: 12px;
+  width: 2px;
+  border-radius: 1px;
+  transform: translateX(-1px);
+}
+
+.growth-meter-top10 {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.growth-meter-top3 {
+  background: #d4af37;
+}
+
+.growth-card-gaps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+}
+
+.growth-gap-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.growth-gap-label {
+  color: var(--text-muted);
+}
+
+.growth-gap-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.growth-gap-behind {
+  color: #b45309;
+}
+
+.growth-gap-ahead {
+  color: #16a34a;
+}
+
+.growth-cards-loading {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 0.75rem;
+  text-align: center;
+  background: var(--bg-hover);
+  border-radius: var(--radius);
+  margin: 1rem 0;
+}
+
+/* ===== レーダーチャート ===== */
+.radar-card {
+  margin: 1.5rem 0;
+  padding: 1rem 1rem 0.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.radar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.radar-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.radar-desc {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.radar-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.radar-toggle input {
+  cursor: pointer;
+  accent-color: var(--accent);
+}
