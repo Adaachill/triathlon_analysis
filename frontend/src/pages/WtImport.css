@@ -160,3 +160,19 @@
   font-style: italic;
   font-size: 0.9rem;
 }
+
+.wti-fallback {
+  margin-top: 2rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--bg-hover);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.wti-fallback a {
+  color: var(--accent);
+  font-weight: 600;
+}

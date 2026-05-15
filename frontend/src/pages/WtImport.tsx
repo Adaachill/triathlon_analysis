@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { api, getPastParaEvents } from '../api'
 import type { AlgoliaEvent } from '../api'
 import './pages.css'
@@ -128,7 +129,7 @@ export default function WtImport() {
   return (
     <div className="page">
       <div className="page-header">
-        <h2>World Triathlon 過去大会インポート</h2>
+        <h2>📥 データ取得（World Triathlon 過去大会）</h2>
       </div>
       <p className="desc">
         World Triathlon の Paratriathlon 大会を取得し、
@@ -282,6 +283,11 @@ export default function WtImport() {
       {!loading && hasFetched && events.length === 0 && !fetchError && (
         <p className="wti-empty">大会が見つかりませんでした。</p>
       )}
+
+      <div className="wti-fallback">
+        World Triathlon に掲載されていない非公式レースの結果がある場合は、
+        <Link to="/admin"> 手動アップロード</Link>から Excel を直接アップロードできます。
+      </div>
     </div>
   )
 }

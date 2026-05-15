@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api'
 import './pages.css'
 
@@ -46,7 +47,11 @@ export default function Admin() {
   return (
     <div className="page">
       <div className="page-header">
-        <h2>📤 レース結果アップロード</h2>
+        <h2>📤 レース結果アップロード（手動）</h2>
+      </div>
+      <div className="admin-redirect-note">
+        💡 World Triathlon の大会は <Link to="/admin/wt-import">📥 データ取得</Link> から
+        ワンクリックで自動インポートできます。このページは公式に未掲載のレースを手動で追加する場合のフォールバックです。
       </div>
       <p className="desc">Excelファイルと大会情報を入力してアップロードしてください。</p>
       <div className="upload-note">
