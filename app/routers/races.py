@@ -123,6 +123,16 @@ async def get_race(
         if difficulty_als is not None and r.total_sec is not None:
             result_dict["standard_total_sec"] = float(r.total_sec) - difficulty_als
 
+        # セグメント毎の標準化タイム
+        if difficulty_als is not None:
+            for seg in _SEGS:
+                seg_key = f"{seg}_sec"
+                actual_val = getattr(r, seg_key, None)
+                seg_diff = als_race_diffs.get(seg_key, 0.0)
+                result_dict[f"standard_{seg}_sec"] = (
+                    float(actual_val) - seg_diff if actual_val is not None else None
+                )
+
         if program_name:
             result_dict["outlier_weight"] = (
                 als_outlier_weights.get(race_id, {}).get(r.athlete_id, 1.0)

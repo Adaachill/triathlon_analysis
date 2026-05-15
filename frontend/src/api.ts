@@ -96,6 +96,11 @@ export interface RaceResult {
   run_sec: number | null;
   total_sec: number | null;
   standard_total_sec?: number | null;
+  standard_swim_sec?: number | null;
+  standard_t1_sec?: number | null;
+  standard_bike_sec?: number | null;
+  standard_t2_sec?: number | null;
+  standard_run_sec?: number | null;
   position: number | null;
   status: string;
   strength_rank?: number | null;
