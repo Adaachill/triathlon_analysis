@@ -117,116 +117,109 @@ export default function BumpChart({ athletes }: { athletes: BumpAthleteInput[] }
   useEffect(() => {
     if (!svgRef.current || !containerRef.current || chartData.length < 2) return
 
-    const containerWidth = containerRef.current.clientWidth
-    if (containerWidth <= 0) return
+    const container = containerRef.current
 
-    const margin = { top: 28, right: 60, bottom: 40, left: 36 }
-    const width  = containerWidth - margin.left - margin.right
-    const n      = chartData.length
-    const rowH   = Math.max(18, Math.min(30, Math.floor(300 / n)))
-    const height = rowH * n
+    const draw = (containerWidth: number) => {
+      if (!svgRef.current || containerWidth <= 0) return
 
-    const svg = d3.select(svgRef.current)
-    svg.selectAll('*').remove()
-    svg.attr('width', containerWidth).attr('height', height + margin.top + margin.bottom)
+      const margin = { top: 28, right: 60, bottom: 40, left: 36 }
+      const width  = containerWidth - margin.left - margin.right
+      const n      = chartData.length
+      const rowH   = Math.max(18, Math.min(30, Math.floor(300 / n)))
+      const height = rowH * n
 
-    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`)
+      const svg = d3.select(svgRef.current)
+      svg.selectAll('*').remove()
+      svg.attr('width', containerWidth).attr('height', height + margin.top + margin.bottom)
 
-    // X: normalized 0-8 space
-    const xScale = d3.scaleLinear().domain([0, 8]).range([0, width])
-    // Y: rank 1 at top
-    const yScale = d3.scaleLinear().domain([0.5, n + 0.5]).range([0, height])
+      const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`)
 
-    // Background stripe for T1/T2 (narrow segments)
-    ;[[3, 1], [6, 1]].forEach(([xPos, w]) => {
-      g.append('rect')
-        .attr('x', xScale(xPos - w)).attr('y', 0)
-        .attr('width', xScale(xPos) - xScale(xPos - w))
-        .attr('height', height)
-        .attr('fill', 'var(--bg-hover, rgba(255,255,255,0.03))')
-        .attr('opacity', 0.5)
-    })
+      // X: normalized 0-8 space
+      const xScale = d3.scaleLinear().domain([0, 8]).range([0, width])
+      // Y: rank 1 at top
+      const yScale = d3.scaleLinear().domain([0.5, n + 0.5]).range([0, height])
 
-    // Vertical lines + labels for each checkpoint
-    CHECKPOINTS.forEach(({ label, xPos }) => {
-      const x = xScale(xPos)
-      g.append('line')
-        .attr('x1', x).attr('x2', x)
-        .attr('y1', 0).attr('y2', height)
-        .attr('stroke', 'var(--border)')
-        .attr('stroke-dasharray', xPos === 0 ? 'none' : '4,4')
-        .attr('stroke-width', 1)
-      g.append('text')
-        .attr('x', x).attr('y', height + 22)
-        .attr('text-anchor', 'middle')
-        .style('fill', 'var(--text-muted)')
-        .style('font-size', '0.75rem')
-        .text(label)
-    })
+      // Background stripe for T1/T2 (narrow segments)
+      ;[[3, 1], [6, 1]].forEach(([xPos, w]) => {
+        g.append('rect')
+          .attr('x', xScale(xPos - w)).attr('y', 0)
+          .attr('width', xScale(xPos) - xScale(xPos - w))
+          .attr('height', height)
+          .attr('fill', 'var(--bg-hover, rgba(255,255,255,0.03))')
+          .attr('opacity', 0.5)
+      })
 
-    // Y-axis rank numbers
-    for (let rank = 1; rank <= n; rank++) {
-      g.append('text')
-        .attr('x', -8).attr('y', yScale(rank) + 4)
-        .attr('text-anchor', 'end')
-        .style('fill', 'var(--text-muted)')
-        .style('font-size', '0.68rem')
-        .text(rank)
-    }
+      // Vertical lines + labels for each checkpoint
+      CHECKPOINTS.forEach(({ label, xPos }) => {
+        const x = xScale(xPos)
+        g.append('line')
+          .attr('x1', x).attr('x2', x)
+          .attr('y1', 0).attr('y2', height)
+          .attr('stroke', 'var(--border)')
+          .attr('stroke-dasharray', xPos === 0 ? 'none' : '4,4')
+          .attr('stroke-width', 1)
+        g.append('text')
+          .attr('x', x).attr('y', height + 22)
+          .attr('text-anchor', 'middle')
+          .style('fill', 'var(--text-muted)')
+          .style('font-size', '0.75rem')
+          .text(label)
+      })
 
-    const lineGen = d3.line<CheckpointData>()
-      .x((d) => xScale(d.xPos))
-      .y((d) => yScale(d.rank))
-      .curve(d3.curveCatmullRom.alpha(0.5))
-
-    const ANIM_MS = 1400
-
-    chartData.forEach((d) => {
-      // Animated path
-      const pathEl = g.append('path')
-        .datum(d.checkpoints)
-        .attr('fill', 'none')
-        .attr('stroke', d.color)
-        .attr('stroke-width', 2.5)
-        .attr('stroke-linecap', 'round')
-        .attr('stroke-opacity', 0.85)
-        .attr('d', lineGen)
-        .style('cursor', 'pointer')
-        .on('click', () => setModal(d))
-        .on('mouseover', function () { d3.select(this).attr('stroke-width', 4).attr('stroke-opacity', 1) })
-        .on('mouseout',  function () { d3.select(this).attr('stroke-width', 2.5).attr('stroke-opacity', 0.85) })
-
-      const pathNode = pathEl.node() as SVGPathElement | null
-      const totalLen = pathNode ? (() => { try { return pathNode.getTotalLength() } catch { return 0 } })() : 0
-      if (totalLen > 0) {
-        pathEl
-          .attr('stroke-dasharray', `${totalLen} ${totalLen}`)
-          .attr('stroke-dashoffset', totalLen)
-          .transition().duration(ANIM_MS).ease(d3.easeLinear)
-          .attr('stroke-dashoffset', 0)
+      // Y-axis rank numbers
+      for (let rank = 1; rank <= n; rank++) {
+        g.append('text')
+          .attr('x', -8).attr('y', yScale(rank) + 4)
+          .attr('text-anchor', 'end')
+          .style('fill', 'var(--text-muted)')
+          .style('font-size', '0.68rem')
+          .text(rank)
       }
 
-      // Dots + rank-change indicators
-      d.checkpoints.forEach((cp, ci) => {
-        const cx = xScale(cp.xPos)
-        const cy = yScale(cp.rank)
-        const improved = cp.rankDelta < 0   // rank number dropped → moved UP
-        const worsened = cp.rankDelta > 0
+      const lineGen = d3.line<CheckpointData>()
+        .x((d) => xScale(d.xPos))
+        .y((d) => yScale(d.rank))
+        .curve(d3.curveCatmullRom.alpha(0.5))
 
-        const dotColor  = improved ? '#22c55e' : worsened ? '#ef4444' : d.color
-        const dotRadius = (improved || worsened) ? 7 : 5
-        const ringColor = (improved || worsened) ? 'rgba(255,255,255,0.9)' : 'var(--bg-card,#1a1a2e)'
+      const ANIM_MS = 1400
 
-        g.append('circle')
-          .attr('cx', cx).attr('cy', cy)
-          .attr('r', dotRadius)
-          .attr('fill', dotColor)
-          .attr('stroke', ringColor)
-          .attr('stroke-width', (improved || worsened) ? 2 : 1.5)
-          .attr('opacity', 0)
+      chartData.forEach((d) => {
+        // Animated path
+        const pathEl = g.append('path')
+          .datum(d.checkpoints)
+          .attr('fill', 'none')
+          .attr('stroke', d.color)
+          .attr('stroke-width', 2.5)
+          .attr('stroke-linecap', 'round')
+          .attr('stroke-opacity', 0.85)
+          .attr('d', lineGen)
           .style('cursor', 'pointer')
           .on('click', () => setModal(d))
-          .on('mousemove', (event: MouseEvent) => {
+          .on('mouseover', function () { d3.select(this).attr('stroke-width', 4).attr('stroke-opacity', 1) })
+          .on('mouseout',  function () { d3.select(this).attr('stroke-width', 2.5).attr('stroke-opacity', 0.85) })
+
+        const pathNode = pathEl.node() as SVGPathElement | null
+        const totalLen = pathNode ? (() => { try { return pathNode.getTotalLength() } catch { return 0 } })() : 0
+        if (totalLen > 0) {
+          pathEl
+            .attr('stroke-dasharray', `${totalLen} ${totalLen}`)
+            .attr('stroke-dashoffset', totalLen)
+            .transition().duration(ANIM_MS).ease(d3.easeLinear)
+            .attr('stroke-dashoffset', 0)
+        }
+
+        // Dots + rank-change indicators
+        d.checkpoints.forEach((cp, ci) => {
+          const cx = xScale(cp.xPos)
+          const cy = yScale(cp.rank)
+          const improved = cp.rankDelta < 0   // rank number dropped → moved UP
+          const worsened = cp.rankDelta > 0
+
+          const dotColor  = improved ? '#22c55e' : worsened ? '#ef4444' : d.color
+          const dotRadius = (improved || worsened) ? 7 : 5
+          const ringColor = (improved || worsened) ? 'rgba(255,255,255,0.9)' : 'var(--bg-card,#1a1a2e)'
+
+          const showTooltip = (clientX: number, clientY: number) => {
             const atCp = chartData
               .map((ad) => ({
                 id:      ad.input.athlete_id,
@@ -238,44 +231,73 @@ export default function BumpChart({ athletes }: { athletes: BumpAthleteInput[] }
             const myIdx = atCp.findIndex((x) => x.id === d.input.athlete_id)
             const above = myIdx > 0 ? atCp[myIdx - 1] : null
             const below = myIdx < atCp.length - 1 ? atCp[myIdx + 1] : null
-            const rect  = containerRef.current!.getBoundingClientRect()
+            const rect  = container.getBoundingClientRect()
             setTooltip({
-              x: event.clientX - rect.left,
-              y: event.clientY - rect.top,
+              x: clientX - rect.left,
+              y: clientY - rect.top,
               athleteName: `${d.input.first_name} ${d.input.last_name}`.trim(),
               cp,
               above: above && cp.key !== 'start' ? { name: above.name, gap: cp.cumTime - above.cumTime } : null,
               below: below && cp.key !== 'start' ? { name: below.name, gap: below.cumTime - cp.cumTime } : null,
             })
-          })
-          .on('mouseout', () => setTooltip(null))
-          .transition().delay(ANIM_MS).duration(200).attr('opacity', 1)
+          }
 
-        // Arrow label above dot for rank changes (T1 onwards only)
-        if (improved || worsened) {
-          const arrow    = improved ? '↑' : '↓'
-          const absDelta = Math.abs(cp.rankDelta)
-          g.append('text')
-            .attr('x', cx).attr('y', cy - dotRadius - 3)
-            .attr('text-anchor', 'middle')
-            .style('fill', improved ? '#22c55e' : '#ef4444')
-            .style('font-size', '0.62rem')
-            .style('font-weight', '700')
+          g.append('circle')
+            .attr('cx', cx).attr('cy', cy)
+            .attr('r', dotRadius)
+            .attr('fill', dotColor)
+            .attr('stroke', ringColor)
+            .attr('stroke-width', (improved || worsened) ? 2 : 1.5)
             .attr('opacity', 0)
-            .text(`${arrow}${absDelta}`)
+            .style('cursor', 'pointer')
+            .on('click', () => setModal(d))
+            .on('mousemove', (event: MouseEvent) => {
+              showTooltip(event.clientX, event.clientY)
+            })
+            .on('mouseout', () => setTooltip(null))
+            .on('touchstart', (event: TouchEvent) => {
+              event.preventDefault()
+              const touch = event.touches[0]
+              if (touch) showTooltip(touch.clientX, touch.clientY)
+            }, { passive: false })
+            .on('touchend', () => setTooltip(null))
             .transition().delay(ANIM_MS).duration(200).attr('opacity', 1)
-        }
-      })
 
-      // Finish rank label on right edge
-      const fin = d.checkpoints[d.checkpoints.length - 1]
-      g.append('text')
-        .attr('x', xScale(fin.xPos) + 9).attr('y', yScale(fin.rank) + 4)
-        .style('fill', d.color).style('font-size', '0.7rem').style('font-weight', '700')
-        .attr('opacity', 0)
-        .text(fin.rank)
-        .transition().delay(ANIM_MS).duration(200).attr('opacity', 1)
+          // Arrow label above dot for rank changes (T1 onwards only)
+          if (improved || worsened) {
+            const arrow    = improved ? '↑' : '↓'
+            const absDelta = Math.abs(cp.rankDelta)
+            g.append('text')
+              .attr('x', cx).attr('y', cy - dotRadius - 3)
+              .attr('text-anchor', 'middle')
+              .style('fill', improved ? '#22c55e' : '#ef4444')
+              .style('font-size', '0.62rem')
+              .style('font-weight', '700')
+              .attr('opacity', 0)
+              .text(`${arrow}${absDelta}`)
+              .transition().delay(ANIM_MS).duration(200).attr('opacity', 1)
+          }
+        })
+
+        // Finish rank label on right edge
+        const fin = d.checkpoints[d.checkpoints.length - 1]
+        g.append('text')
+          .attr('x', xScale(fin.xPos) + 9).attr('y', yScale(fin.rank) + 4)
+          .style('fill', d.color).style('font-size', '0.7rem').style('font-weight', '700')
+          .attr('opacity', 0)
+          .text(fin.rank)
+          .transition().delay(ANIM_MS).duration(200).attr('opacity', 1)
+      })
+    }
+
+    // ResizeObserver で幅変化を監視し、iOS で clientWidth=0 から正常値に変わった時も描画する
+    const observer = new ResizeObserver((entries) => {
+      const width = Math.floor(entries[0]?.contentRect.width ?? 0)
+      draw(width)
     })
+    observer.observe(container)
+
+    return () => observer.disconnect()
   }, [chartData])
 
   if (chartData.length < 2) return null
