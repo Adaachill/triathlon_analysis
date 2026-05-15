@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { api, formatTime, getCountryFlag, type RankingSortBy } from '../api'
+import { LoadingState, TableSkeleton } from '../components/Loading'
 import './pages.css'
 
 type SortConfig = { key: RankingSortBy; label: string; strengthKey: string; rankKey: string }
@@ -45,7 +46,16 @@ export default function Rankings() {
   }, [program, sortBy])
 
   if (error) return <div className="error">{error}</div>
-  if (loading && !data) return <div className="loading">読み込み中...</div>
+  if (loading && !data) {
+    return (
+      <div className="rankings-page">
+        <div className="card">
+          <LoadingState variant="card" />
+          <TableSkeleton rows={10} cols={8} />
+        </div>
+      </div>
+    )
+  }
 
   const activeConfig = SORT_CONFIGS.find((c) => c.key === sortBy) ?? SORT_CONFIGS[0]
 

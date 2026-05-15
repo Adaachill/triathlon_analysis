@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { api, formatTime, formatDiff, getCountryFlag } from '../api'
 import type { AthleteRace } from '../api'
+import { LoadingState } from '../components/Loading'
 import './pages.css'
 
 const DAYS = 86400000
@@ -266,7 +267,7 @@ export default function AthleteDetail() {
   }
 
   if (error) return <div className="error">{error}</div>
-  if (loading && !data) return <div className="loading">読み込み中...</div>
+  if (loading && !data) return <LoadingState variant="page" />
   if (data && 'error' in data) return <div className="error">{(data as { error: string }).error}</div>
   if (!data) return null
 

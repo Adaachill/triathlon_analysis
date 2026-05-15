@@ -460,8 +460,17 @@ export interface EvalResult {
   filters?: { since_years: number | null; min_athlete_races: number };
 }
 
+export interface StatsResponse {
+  race_count: number;
+  athlete_count: number;
+  result_count: number;
+  program_count: number;
+  last_race_date: string | null;
+}
+
 export const api = {
   getPrograms: () => fetchApi<Program>('/programs'),
+  getStats: () => fetchApi<StatsResponse>('/stats'),
   getRaces: () => fetchApi<Race[]>('/races'),
   getRace: (id: number, programName?: string) =>
     fetchApi<RaceDetail>(`/races/${id}`, programName ? { program_name: programName } : undefined),
