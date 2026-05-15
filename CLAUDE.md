@@ -201,6 +201,83 @@ npx tsc --noEmit    # 型エラーがないことを確認
 - ローカルの `npm run dev`（esbuild）では通っても、`tsc` で型エラーが出る場合がある（PR #19の教訓）
 - ビルドエラーまたは型エラーがある場合は**PRを作成しない**
 
+### モバイル互換性ルール
+
+UI に関わる変更は、PC での確認に加えて**モバイル（iOS・Android）での動作を必ず確認**すること。（PR #51 の教訓：`clientWidth=0` タイミング問題により、iPhone でバンプチャートが表示されなかった）
+
+#### ブラウザエンジンの前提知識
+
+| 環境 | エンジン | 特徴 |
+|------|---------|------|
+| iOS Safari | WebKit | Apple の制約により iOS の全ブラウザが WebKit を使用 |
+| iOS Chrome / Firefox / Edge | WebKit (WKWebView) | 見た目は別ブラウザでも内部は Safari と同一エンジン |
+| Android Chrome | Blink | PC Chrome と同エンジン。標準準拠度が高い |
+| Android Firefox | Gecko | PC Firefox と同エンジン |
+| Android WebView | Blink | ハイブリッドアプリ内の表示に使用。旧端末ではバージョンが古い場合あり |
+
+**iOS**: Safari 1台で確認すれば iOS の全ブラウザをカバーできる。
+**Android**: Chrome（Blink）が代表。旧端末の WebView 向けには別途確認が必要な場合がある。
+
+#### DOM サイズ取得ルール
+
+`clientWidth` / `getBoundingClientRect()` の直接読み取りを**禁止**し、`ResizeObserver` を使うこと。
+
+```typescript
+// NG: iOS/Android でレイアウト未確定時に 0 が返りうる
+const w = containerRef.current.clientWidth
+if (w <= 0) return  // 一度 return したら再描画されない
+
+// OK: レイアウト確定・画面回転のタイミングで自動的に再発火する
+const observer = new ResizeObserver(([entry]) => {
+  const width = Math.floor(entry.contentRect.width)
+  if (width > 0) draw(width)
+})
+observer.observe(containerRef.current)
+return () => observer.disconnect()
+```
+
+理由：iOS WebKit・Android の一部端末では、コンポーネントマウント直後に `clientWidth=0` を返すことがある。`ResizeObserver` はレイアウト確定後に必ず発火するため、タイミング問題を回避できる。
+
+#### インタラクション実装ルール
+
+マウスイベントはタッチデバイスで発火しない。`mousemove` / `mouseenter` / `mouseout` を使う場合は、対応するタッチイベントを**必ずセットで実装**すること。iOS・Android とも同じイベント API を使うため、一度の実装で両方に対応できる。
+
+```typescript
+// NG: タッチデバイスで動かない
+element.on('mousemove', handler)
+
+// OK: マウスとタッチを両方実装する
+element
+  .on('mousemove', (e: MouseEvent) => show(e.clientX, e.clientY))
+  .on('mouseout', hide)
+  .on('touchstart', (e: TouchEvent) => {
+    e.preventDefault()  // スクロールとの競合を防ぐ
+    const t = e.touches[0]
+    if (t) show(t.clientX, t.clientY)
+  }, { passive: false })
+  .on('touchend', hide)
+```
+
+#### SVG / Canvas を使う場合の注意点
+
+| 落とし穴 | 対象 | 対策 |
+|----------|------|------|
+| `clientWidth=0` でチャートが描画されない | iOS・Android | `ResizeObserver` を使う（上記参照） |
+| `getTotalLength()` が例外を投げる | iOS Safari | `try { return el.getTotalLength() } catch { return 0 }` |
+| `stroke-dashoffset` アニメーションが止まる | iOS（バックグラウンド時） | `document.visibilitychange` で再開処理を入れる |
+| `mousemove` でツールチップが出ない | iOS・Android | `touchstart` を追加する（上記参照） |
+| `position: fixed; inset: 0` が崩れる | iOS 14 以前 | `top:0; right:0; bottom:0; left:0` を明示的に書く |
+
+#### PR チェックリスト（UI 変更時）
+
+```markdown
+- [ ] PC Chrome で動作確認
+- [ ] iPhone Safari で動作確認（iOS の全ブラウザをカバー）
+- [ ] Android Chrome で動作確認
+- [ ] 画面回転・ウィンドウリサイズ後にレイアウトが崩れないこと
+- [ ] タッチ操作（タップ・スワイプ）が正しく動作すること
+```
+
 ### テスト実行ルール
 
 バックエンドのロジック変更・新規実装を行った場合は、以下を確認すること。
