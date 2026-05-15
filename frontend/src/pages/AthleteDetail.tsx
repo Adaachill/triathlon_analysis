@@ -130,7 +130,7 @@ function AthleteCumulativeChart({ races }: { races: AthleteRace[] }) {
                   return [formatTime(v), seg ? `${seg.icon} ${seg.label}` : name]
                 }}
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', fontSize: '0.82rem', borderRadius: '8px' }}
-                curso={{ fill: 'rgba(30,107,186,0.06)' }}
+                cursor={{ fill: 'rgba(30,107,186,0.06)' }}
               />
               {SEG_CONFIG.map((seg, i) => (
                 <Bar key={seg.key as string} dataKey={seg.key as string} stackId="a" fill={seg.color}

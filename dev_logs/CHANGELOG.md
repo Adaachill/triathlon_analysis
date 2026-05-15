@@ -1,5 +1,30 @@
 # 開発履歴
 
+## 2026-05-15: AthleteDetail Tooltip の `curso` タイポ修正（ビルドエラー解消）
+**コミット:** `(本PR)`
+**ブランチ:** claude/fix-tooltip-props-9xe3I
+
+### 変更内容
+- `frontend/src/pages/AthleteDetail.tsx`: 累積タイム BarChart の `<Tooltip>` プロパティ `curso` → `cursor` にリネーム
+
+### 変更意図・背景
+PR #57 / #58 マージ後の main ブランチで、`tsc` が以下のエラーで失敗していた。
+
+```
+src/pages/AthleteDetail.tsx(132,17): error TS2769: No overload matches this call.
+  Property 'curso' does not exist on type '... TooltipProps<number, string>'.
+  Did you mean 'cursor'?
+```
+
+`recharts` の `<Tooltip>` には `cursor` プロパティしか存在せず、`curso` は未定義のため型エラーで本番ビルドが落ちる。
+
+### 技術的決定事項
+- 単純な typo 修正。挙動上の影響なし（`cursor` は元から意図していた hover 時の背景色 fill 指定）
+- `npm run build` および `npx tsc --noEmit` でビルド・型チェックがグリーンになることを確認
+
+### 残課題・次のステップ
+- なし
+
 ## 2026-05-15: 選手分析「What-if シミュレータ」追加
 **コミット:** `(本PR)`
 **ブランチ:** claude/whatif-simulator-pQ3w
