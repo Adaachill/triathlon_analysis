@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { api, formatTime, formatDiff, getCountryFlag } from '../api'
 import type { AthleteRace, RankingEntry } from '../api'
+import WhatIfSimulator from '../components/WhatIfSimulator'
 import { GrowthCards, SegmentRadar } from '../components/GrowthRadar'
 import { LoadingState } from '../components/Loading'
 import './pages.css'
@@ -258,6 +259,7 @@ export default function AthleteDetail() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
+    // What-if 順位再計算用にカテゴリランキングを並列取得
     // 伸び代分析・レーダー用にカテゴリ内ランキングを並列取得（失敗してもメインの表示は影響しない）
     api.getRankings(selProgram, 200, 'total')
       .then((r) => setCategoryRankings(r.rankings))
@@ -388,6 +390,8 @@ export default function AthleteDetail() {
           )
         })()}
 
+        {/* What-if シミュレータ: スライダーで各セグメントを動かして予想順位を再計算 */}
+        <WhatIfSimulator athlete={data} rankings={categoryRankings} />
         {/* 伸び代分析カード（同カテゴリTOPとの比較） */}
         <GrowthCards athlete={data} rankings={categoryRankings} />
 
