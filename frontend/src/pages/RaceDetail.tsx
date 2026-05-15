@@ -289,6 +289,25 @@ export default function RaceDetail() {
     if (program && !selProgram) setSelProgram(program)
   }, [program])
 
+  // 早期 return より前に宣言しないと Rules of Hooks 違反（React error #310）になる
+  const gapMap = useMemo(() => {
+    if (!data || !('results' in data)) return {} as Record<string, number | null>
+    const finished = data.results
+      .filter((r) => r.status === 'Finished' && r.total_sec != null && r.position != null)
+      .sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+    const map: Record<string, number | null> = {}
+    for (let i = 0; i < finished.length; i++) {
+      if (i === 0) {
+        map[finished[i].athlete_id] = null
+      } else {
+        const prev = finished[i - 1].total_sec ?? 0
+        const cur  = finished[i].total_sec ?? 0
+        map[finished[i].athlete_id] = cur - prev
+      }
+    }
+    return map
+  }, [data])
+
   const toggleExpand = (athleteId: string) => {
     setExpandedAthletes((prev) => {
       const next = new Set(prev)
@@ -346,24 +365,6 @@ export default function RaceDetail() {
   const hasPred = results.some((r) => r.pred_swim_sec != null || r.pred_t1_sec != null)
   const hasStandard = difficulty_als != null
   const colSpanBase = 3 + (hasStandard ? 2 : 0)
-
-  // ギャップ計算（実タイムモード時のみ）
-  const gapMap = useMemo(() => {
-    const finished = results
-      .filter((r) => r.status === 'Finished' && r.total_sec != null && r.position != null)
-      .sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
-    const map: Record<string, number | null> = {}
-    for (let i = 0; i < finished.length; i++) {
-      if (i === 0) {
-        map[finished[i].athlete_id] = null
-      } else {
-        const prev = finished[i - 1].total_sec ?? 0
-        const cur = finished[i].total_sec ?? 0
-        map[finished[i].athlete_id] = cur - prev
-      }
-    }
-    return map
-  }, [results])
 
   const viewModeOptions: { value: ViewMode; label: string }[] = [
     { value: 'actual', label: '実タイム' },

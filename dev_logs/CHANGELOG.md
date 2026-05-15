@@ -17,6 +17,25 @@ PR #51（バンプチャート iOS 表示不具合）の教訓を開発ルール
 
 ### 残課題・次のステップ
 - 実際に BrowserStack 等でのモバイル確認フローを CI に組み込む場合は別途対応
+## 2026-05-15: React error #310（Rules of Hooks 違反）の修正
+**コミット:** `(本PR)`
+**ブランチ:** claude/fix-react-hook-violation-pN2s
+
+### 変更内容
+- `frontend/src/pages/RaceDetail.tsx`: `gapMap` の `useMemo` を早期 return（lines 301–304）より後から前に移動。依存配列を `results` から `data` に変更し、null チェックを追加
+
+### 変更意図・背景
+本番環境（GitHub Pages）で "Minified React error #310" が発生し、レース結果ページが表示されない問題を修正。
+
+`gapMap` の `useMemo`（旧 line 351）が早期 return（lines 301–304）より後に宣言されていたため、初回レンダー（loading=true → 早期 return → useMemo をスキップ）とデータ取得後のレンダー（useMemo まで到達）でフックの呼び出し数が異なり、React が #310 エラーを発生させていた。
+
+### 技術的決定事項
+- `useMemo` を useEffect 3本の直後、早期 return の前に移動する最小変更を採用
+- 旧コードは `results`（早期 return 後の destructuring 変数）を依存配列に使っていたため、`data` 全体を依存配列に変更し、`data.results` への null チェックを内側に追加
+- 出力の型（`Record<string, number | null>`）と計算ロジックは同一
+
+### 残課題・次のステップ
+- TS5101（`baseUrl` deprecation warning）による `npm run build` 失敗は main に既存の問題として残っている。別 PR で対処する
 
 ## 2026-05-15: バンプチャート iOS 表示不具合の修正
 **コミット:** `(本PR)`
