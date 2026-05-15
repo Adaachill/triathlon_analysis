@@ -1,5 +1,24 @@
 # 開発履歴
 
+## 2026-05-15: バンプチャート iOS 表示不具合の修正
+**コミット:** `(本PR)`
+**ブランチ:** claude/fix-bump-chart-iphone-ALRhn
+
+### 変更内容
+- `frontend/src/pages/BumpChart.tsx`: `useEffect` 内の描画処理を `draw(width)` 関数に切り出し、`ResizeObserver` で管理。タッチイベント（`touchstart` / `touchend`）をドットに追加
+
+### 変更意図・背景
+iPhone (iOS Safari / iOS Chrome) でバンプチャートが表示されない・表示が遅い問題の修正。
+
+iOS では `useEffect` 実行タイミングでコンテナの `clientWidth` が `0` を返すことがある（WebKit のレイアウト計算タイミングの問題）。従来のコードは `if (containerWidth <= 0) return` で即リターンした後、再描画するトリガーがなかったため、チャートが空白のままになっていた。iOS Chrome も内部で WebKit を使用するため同じ症状が起きていた。
+
+### 技術的決定事項
+- **ResizeObserver** を採用：`container.clientWidth` の直接読み取りから変更。`ResizeObserver` はコンテナサイズの変化（初回確定・画面回転）を検知してコールバックを発火するため、iOS のレイアウト遅延に対して堅牢
+- タッチイベント追加：ドット上の `mousemove` / `mouseout` はタッチデバイスでは発火しない。`touchstart` でツールチップを表示し、`touchend` で非表示にする処理を追加（`preventDefault()` でスクロール競合も回避）
+
+### 残課題・次のステップ
+- ライン自体（`<path>`）へのタッチ操作（スワイプで詳細モーダルを開く等）は対応していない
+
 ## 2026-05-14: ランキング・レース結果ページのパフォーマンス最適化
 **コミット:** `(本PR)`
 **ブランチ:** claude/optimize-ranking-results-pages-ZDPRL
