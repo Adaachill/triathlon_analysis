@@ -5,7 +5,8 @@ import {
   BarChart, Bar, LabelList,
 } from 'recharts'
 import { api, formatTime, formatDiff, getCountryFlag } from '../api'
-import type { AthleteRace } from '../api'
+import type { AthleteRace, RankingEntry } from '../api'
+import WhatIfSimulator from '../components/WhatIfSimulator'
 import './pages.css'
 
 const DAYS = 86400000
@@ -232,6 +233,7 @@ export default function AthleteDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedRaces, setExpandedRaces] = useState<Set<number>>(new Set())
+  const [categoryRankings, setCategoryRankings] = useState<RankingEntry[] | null>(null)
 
   useEffect(() => {
     api.getPrograms().then((r) => {
@@ -245,6 +247,7 @@ export default function AthleteDetail() {
   useEffect(() => {
     if (!athleteId || !selProgram) return
     setLoading(true)
+    setCategoryRankings(null)
     api.getAthlete(athleteId, selProgram)
       .then((d) => {
         setData(d)
@@ -254,6 +257,10 @@ export default function AthleteDetail() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
+    // What-if 順位再計算用にカテゴリランキングを並列取得
+    api.getRankings(selProgram, 200, 'total')
+      .then((r) => setCategoryRankings(r.rankings))
+      .catch(() => setCategoryRankings([]))
   }, [athleteId, selProgram])
 
   const toggleExpand = (raceId: number) => {
@@ -379,6 +386,9 @@ export default function AthleteDetail() {
             </div>
           )
         })()}
+
+        {/* What-if シミュレータ: スライダーで各セグメントを動かして予想順位を再計算 */}
+        <WhatIfSimulator athlete={data} rankings={categoryRankings} />
 
         {data.races.length > 0 && (
           <div className="chart-container">
