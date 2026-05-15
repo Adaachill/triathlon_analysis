@@ -7,6 +7,8 @@ import {
 import { api, formatTime, formatDiff, getCountryFlag } from '../api'
 import type { AthleteRace, RankingEntry } from '../api'
 import WhatIfSimulator from '../components/WhatIfSimulator'
+import { GrowthCards, SegmentRadar } from '../components/GrowthRadar'
+import { LoadingState } from '../components/Loading'
 import './pages.css'
 
 const DAYS = 86400000
@@ -128,7 +130,7 @@ function AthleteCumulativeChart({ races }: { races: AthleteRace[] }) {
                   return [formatTime(v), seg ? `${seg.icon} ${seg.label}` : name]
                 }}
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', fontSize: '0.82rem', borderRadius: '8px' }}
-                cursor={{ fill: 'rgba(30,107,186,0.06)' }}
+                curso={{ fill: 'rgba(30,107,186,0.06)' }}
               />
               {SEG_CONFIG.map((seg, i) => (
                 <Bar key={seg.key as string} dataKey={seg.key as string} stackId="a" fill={seg.color}
@@ -258,6 +260,7 @@ export default function AthleteDetail() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
     // What-if 順位再計算用にカテゴリランキングを並列取得
+    // 伸び代分析・レーダー用にカテゴリ内ランキングを並列取得（失敗してもメインの表示は影響しない）
     api.getRankings(selProgram, 200, 'total')
       .then((r) => setCategoryRankings(r.rankings))
       .catch(() => setCategoryRankings([]))
@@ -273,7 +276,7 @@ export default function AthleteDetail() {
   }
 
   if (error) return <div className="error">{error}</div>
-  if (loading && !data) return <div className="loading">読み込み中...</div>
+  if (loading && !data) return <LoadingState variant="page" />
   if (data && 'error' in data) return <div className="error">{(data as { error: string }).error}</div>
   if (!data) return null
 
@@ -389,6 +392,11 @@ export default function AthleteDetail() {
 
         {/* What-if シミュレータ: スライダーで各セグメントを動かして予想順位を再計算 */}
         <WhatIfSimulator athlete={data} rankings={categoryRankings} />
+        {/* 伸び代分析カード（同カテゴリTOPとの比較） */}
+        <GrowthCards athlete={data} rankings={categoryRankings} />
+
+        {/* セグメント別ポジショニング（レーダー） */}
+        <SegmentRadar athlete={data} rankings={categoryRankings} />
 
         {data.races.length > 0 && (
           <div className="chart-container">

@@ -1,0 +1,152 @@
+/* ===== 3D 回転トライアスロンスピナー ===== */
+.tri-spinner {
+  position: relative;
+  perspective: 300px;
+  display: inline-block;
+}
+
+.tri-spinner-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  animation: tri-spinner-rotate 3s linear infinite;
+}
+
+.tri-spinner-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--spinner-size, 56px) * 0.62);
+  line-height: 1;
+  backface-visibility: hidden;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.18));
+}
+
+/* 3つの絵文字を3D空間で 120° ずつ配置 */
+.tri-spinner-face-1 { transform: rotateY(0deg)   translateZ(var(--spinner-radius, 28px)); }
+.tri-spinner-face-2 { transform: rotateY(120deg) translateZ(var(--spinner-radius, 28px)); }
+.tri-spinner-face-3 { transform: rotateY(240deg) translateZ(var(--spinner-radius, 28px)); }
+
+@keyframes tri-spinner-rotate {
+  0%   { transform: rotateY(0) rotateX(8deg); }
+  100% { transform: rotateY(360deg) rotateX(8deg); }
+}
+
+/* prefers-reduced-motion: 回転を止めて単純フェードに */
+@media (prefers-reduced-motion: reduce) {
+  .tri-spinner-stage {
+    animation: tri-spinner-fade 1.5s ease-in-out infinite alternate;
+  }
+  .tri-spinner-face-2, .tri-spinner-face-3 { display: none; }
+}
+@keyframes tri-spinner-fade {
+  from { opacity: 0.4; }
+  to   { opacity: 1; }
+}
+
+/* ===== ローディング状態のレイアウト ===== */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.loading-state-page {
+  padding: 4rem 1rem;
+  min-height: 280px;
+}
+
+.loading-state-card {
+  padding: 2.5rem 1rem;
+}
+
+.loading-state-inline {
+  flex-direction: row;
+  padding: 1rem;
+}
+
+.loading-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.loading-progress-msg {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text);
+  max-width: 32rem;
+  line-height: 1.5;
+}
+
+.loading-progress-elapsed {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+/* ===== スケルトン ===== */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0;  }
+}
+
+.skeleton-bar {
+  display: inline-block;
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-hover) 0%,
+    rgba(0, 0, 0, 0.04) 50%,
+    var(--bg-hover) 100%
+  );
+  background-size: 800px 100%;
+  animation: skeleton-shimmer 1.4s linear infinite;
+}
+
+.skeleton-bar-sm {
+  height: 10px;
+  width: 60%;
+}
+
+.skeleton-bar-lg {
+  height: 16px;
+}
+
+.skeleton-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.skeleton-table th,
+.skeleton-table td {
+  padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.skeleton-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { LoadingState, TableSkeleton } from '../components/Loading'
 import './pages.css'
 
 export default function Races() {
@@ -24,7 +25,16 @@ export default function Races() {
   }, [])
 
   if (error) return <div className="error">{error}</div>
-  if (loading) return <div className="loading">読み込み中...</div>
+  if (loading) {
+    return (
+      <div className="races-page">
+        <div className="card">
+          <LoadingState variant="card" />
+          <TableSkeleton rows={8} cols={4} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="races-page">

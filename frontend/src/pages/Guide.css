@@ -1,46 +1,277 @@
 .guide-page {
-  max-width: 860px;
+  max-width: 880px;
   margin: 0 auto;
 }
 
-.guide-server-notice {
-  background: #fffbeb;
-  border: 1px solid #f59e0b;
-  border-radius: var(--radius);
-  padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  font-size: 0.88rem;
-  color: #78350f;
-}
-.guide-server-notice strong {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-size: 0.9rem;
-}
-.guide-server-notice p {
-  margin: 0;
-  line-height: 1.6;
-}
-
 .guide-hero {
-  background: linear-gradient(135deg, var(--accent) 0%, #1557a0 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, #1557a0 60%, #0c3d77 100%);
   color: #fff;
   border-radius: var(--radius);
-  padding: 2rem 2.5rem;
+  padding: 1.75rem 2rem;
   margin-bottom: 1rem;
+  box-shadow: 0 8px 24px rgba(30, 107, 186, 0.18);
+}
+
+.guide-hero-rich {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+.guide-hero-spinner-wrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+}
+
+.guide-hero-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .guide-hero-title {
   margin: 0 0 0.5rem;
   font-size: 1.6rem;
   font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .guide-hero-sub {
-  margin: 0;
-  font-size: 1rem;
+  margin: 0 0 1rem;
+  font-size: 0.98rem;
   opacity: 0.92;
-  line-height: 1.7;
+  line-height: 1.6;
+}
+
+.guide-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.guide-hero-stat {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  text-align: center;
+}
+
+.stat-num {
+  font-size: 1.4rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.stat-num-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2;
+  padding-top: 0.3rem;
+}
+
+.stat-num-placeholder {
+  display: inline-block;
+  width: 2rem;
+  opacity: 0.5;
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  opacity: 0.78;
+  margin-top: 0.15rem;
+}
+
+.guide-hero-warming {
+  margin: 0.9rem 0 0;
+  font-size: 0.78rem;
+  opacity: 0.85;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  border-left: 3px solid rgba(255, 255, 255, 0.5);
+}
+
+@media (max-width: 640px) {
+  .guide-hero {
+    padding: 1.25rem 1.1rem;
+  }
+  .guide-hero-rich {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: center;
+    text-align: center;
+  }
+  .guide-hero-spinner-wrap {
+    width: 64px;
+    height: 64px;
+  }
+  .guide-hero-title {
+    font-size: 1.35rem;
+  }
+  .guide-hero-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ===== 直近 & 近日開催 セクション ===== */
+.guide-cards-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .guide-cards-row {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+.guide-cards-col {
+  min-width: 0;
+}
+
+.guide-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.guide-mini-row {
+  display: grid;
+  grid-template-columns: 4.2rem 1fr auto;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.85rem;
+  border: 1px solid transparent;
+  transition: border-color 0.15s, transform 0.1s;
+}
+
+.guide-mini-row:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+  transform: translateX(2px);
+}
+
+.guide-mini-date {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.guide-mini-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.guide-mini-loc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.guide-cards-more {
+  display: inline-block;
+  margin-top: 0.65rem;
+  font-size: 0.82rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.guide-recent-loading {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: 1rem 0;
+  text-align: center;
+}
+
+.guide-empty {
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* ===== ペルソナ別ユースケース ===== */
+.guide-persona-intro {
+  margin: 0 0 1rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.guide-persona-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+}
+
+@media (max-width: 800px) {
+  .guide-persona-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.guide-persona-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.guide-persona-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.guide-persona-icon {
+  font-size: 1.5rem;
+}
+
+.guide-persona-title {
+  font-weight: 700;
+  font-size: 0.98rem;
+}
+
+.guide-persona-bullets {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.guide-persona-bullets li::marker {
+  color: var(--accent);
+}
+
+/* ===== FAQ ===== */
+.guide-faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .guide-section-title {
