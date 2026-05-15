@@ -1,19 +1,19 @@
-import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, LabelList } from 'recharts'
 import { api, formatTime, formatDiff, getCountryFlag } from '../api'
 import type { RaceResult } from '../api'
 import BumpChart, { type BumpAthleteInput } from './BumpChart'
 import './pages.css'
 
-type ViewMode = 'actual' | 'standard' | 'gap'
+type ViewMode = 'actual' | 'standard'
 
-const SEGS: { key: keyof RaceResult; predKey: keyof RaceResult; label: string }[] = [
-  { key: 'swim_sec', predKey: 'pred_swim_sec', label: 'Swim' },
-  { key: 't1_sec',   predKey: 'pred_t1_sec',   label: 'T1'   },
-  { key: 'bike_sec', predKey: 'pred_bike_sec', label: 'Bike' },
-  { key: 't2_sec',   predKey: 'pred_t2_sec',   label: 'T2'   },
-  { key: 'run_sec',  predKey: 'pred_run_sec',  label: 'Run'  },
+const SEGS: { key: keyof RaceResult; predKey: keyof RaceResult; stdKey: keyof RaceResult; label: string }[] = [
+  { key: 'swim_sec', predKey: 'pred_swim_sec', stdKey: 'standard_swim_sec', label: 'Swim' },
+  { key: 't1_sec',   predKey: 'pred_t1_sec',   stdKey: 'standard_t1_sec',   label: 'T1'   },
+  { key: 'bike_sec', predKey: 'pred_bike_sec', stdKey: 'standard_bike_sec', label: 'Bike' },
+  { key: 't2_sec',   predKey: 'pred_t2_sec',   stdKey: 'standard_t2_sec',   label: 'T2'   },
+  { key: 'run_sec',  predKey: 'pred_run_sec',  stdKey: 'standard_run_sec',  label: 'Run'  },
 ]
 
 const SEG_CONFIG: { key: keyof RaceResult; label: string; icon: string; color: string }[] = [
@@ -35,8 +35,6 @@ const CHECKPOINT_LABELS = [
 function CumulativeSegChart({ results }: { results: RaceResult[] }) {
   const [step, setStep] = useState(4)
   const [animKey, setAnimKey] = useState(0)
-  const touchStartX = useRef<number | null>(null)
-  const touchStartY = useRef<number | null>(null)
 
   const top15 = useMemo(() =>
     results
@@ -86,23 +84,6 @@ function CumulativeSegChart({ results }: { results: RaceResult[] }) {
     setAnimKey((k) => k + 1)
   }
 
-  const onTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX
-    touchStartY.current = e.touches[0].clientY
-  }
-
-  const onTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX.current === null || touchStartY.current === null) return
-    const dx = e.changedTouches[0].clientX - touchStartX.current
-    const dy = e.changedTouches[0].clientY - touchStartY.current
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-      if (dx < 0 && step < 4) goTo(step + 1)
-      if (dx > 0 && step > 0) goTo(step - 1)
-    }
-    touchStartX.current = null
-    touchStartY.current = null
-  }
-
   const cp = CHECKPOINT_LABELS[step]
 
   if (top15.length === 0) return null
@@ -131,11 +112,7 @@ function CumulativeSegChart({ results }: { results: RaceResult[] }) {
         </div>
       </div>
 
-      <div
-        className="cum-chart-wrap"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-      >
+      <div className="cum-chart-wrap">
         <button
           className="cum-nav-btn cum-nav-left"
           onClick={() => step > 0 && goTo(step - 1)}
@@ -143,9 +120,14 @@ function CumulativeSegChart({ results }: { results: RaceResult[] }) {
           aria-label="前のチェックポイント"
         >‹</button>
 
-        <div className="cum-chart-inner" key={animKey}>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 64 }}>
+        <div className="cum-chart-scroll-outer">
+          <div className="cum-chart-inner" key={animKey} style={{ minWidth: Math.max(600, top15.length * 72) }}>
+            <BarChart
+              width={Math.max(600, top15.length * 72)}
+              height={320}
+              data={chartData}
+              margin={{ top: 40, right: 8, left: 0, bottom: 64 }}
+            >
               <XAxis
                 dataKey="name"
                 tick={{ fontSize: 10 }}
@@ -221,7 +203,7 @@ function CumulativeSegChart({ results }: { results: RaceResult[] }) {
                 </Bar>
               ))}
             </BarChart>
-          </ResponsiveContainer>
+          </div>
         </div>
 
         <button
@@ -242,7 +224,7 @@ function CumulativeSegChart({ results }: { results: RaceResult[] }) {
         ))}
       </div>
 
-      <p className="cum-swipe-hint">← スワイプでチェックポイントを切り替え →</p>
+      <p className="cum-swipe-hint">‹ › ボタンでチェックポイントを切り替え（グラフは横スクロール可）</p>
     </div>
   )
 }
@@ -261,6 +243,7 @@ export default function RaceDetail() {
   const [saving, setSaving] = useState(false)
   const [expandedAthletes, setExpandedAthletes] = useState<Set<string>>(new Set())
   const [viewMode, setViewMode] = useState<ViewMode>('actual')
+  const [showGap, setShowGap] = useState(false)
 
   useEffect(() => {
     api.getPrograms().then((r) => {
@@ -369,14 +352,7 @@ export default function RaceDetail() {
   const viewModeOptions: { value: ViewMode; label: string }[] = [
     { value: 'actual', label: '実タイム' },
     { value: 'standard', label: '標準化タイム' },
-    { value: 'gap', label: '予想とのギャップ' },
   ]
-
-  const getSegGap = (r: RaceResult, key: keyof RaceResult, predKey: keyof RaceResult) => {
-    const actual = r[key] as number | null | undefined
-    const pred = r[predKey] as number | null | undefined
-    return actual != null && pred != null ? actual - pred : null
-  }
 
   return (
     <div className="race-detail-page">
@@ -452,8 +428,6 @@ export default function RaceDetail() {
           </p>
         )}
 
-        <CumulativeSegChart results={results} />
-
         {/* 順位変動バンプチャート（実績タイム） */}
         <BumpChart athletes={results.flatMap((r): BumpAthleteInput[] => {
           if (
@@ -479,7 +453,7 @@ export default function RaceDetail() {
             <label className="view-mode-label">表示:</label>
             <select
               value={viewMode}
-              onChange={(e) => setViewMode(e.target.value as ViewMode)}
+              onChange={(e) => { setViewMode(e.target.value as ViewMode); setShowGap(false) }}
               className="view-mode-select"
             >
               {viewModeOptions.map((opt) => (
@@ -488,13 +462,18 @@ export default function RaceDetail() {
             </select>
           </div>
           {hasPred && viewMode === 'actual' && (
-            <p className="desc" style={{ margin: 0 }}>
-              行をクリックするとセグメント詳細を展開/折りたたみできます。
-            </p>
+            <label className="gap-toggle-label">
+              <input
+                type="checkbox"
+                checked={showGap}
+                onChange={(e) => setShowGap(e.target.checked)}
+              />
+              予想との差を表示
+            </label>
           )}
-          {viewMode === 'gap' && (
+          {hasPred && viewMode === 'actual' && showGap && (
             <p className="desc" style={{ margin: 0 }}>
-              予想タイムとの差分。マイナス（緑）＝予想より速い、プラス（赤）＝予想より遅い。
+              予想タイムとの差分。行をクリックしてセグメント詳細を展開できます。マイナス（緑）＝予想より速い、プラス（赤）＝予想より遅い。
             </p>
           )}
         </div>
@@ -521,23 +500,13 @@ export default function RaceDetail() {
                 )}
                 {viewMode === 'standard' && (
                   <>
-                    <th>🏊 Swim</th>
-                    <th>⚡ T1</th>
-                    <th>🚴 Bike</th>
-                    <th>🔄 T2</th>
-                    <th>🏃 Run</th>
+                    <th>🏊 Swim*</th>
+                    <th>⚡ T1*</th>
+                    <th>🚴 Bike*</th>
+                    <th>🔄 T2*</th>
+                    <th>🏃 Run*</th>
                     <th>実タイム合計</th>
                     <th className="col-total-highlight">標準化合計</th>
-                  </>
-                )}
-                {viewMode === 'gap' && (
-                  <>
-                    <th>🏊 Swim差</th>
-                    <th>⚡ T1差</th>
-                    <th>🚴 Bike差</th>
-                    <th>🔄 T2差</th>
-                    <th>🏃 Run差</th>
-                    <th className="col-total-highlight">🏁 合計差</th>
                   </>
                 )}
               </tr>
@@ -549,18 +518,11 @@ export default function RaceDetail() {
                   r.strength_rank != null && r.position != null
                     ? r.strength_rank - r.position
                     : null
-                const canExpand = hasPred && r.status === 'Finished' && viewMode === 'actual'
+                const canExpand = hasPred && r.status === 'Finished' && viewMode === 'actual' && showGap
                 const isOutlier = r.outlier_weight != null && r.outlier_weight < 0.8
 
-                const totalGap = (() => {
-                  const actuals = SEGS.map(({ key }) => r[key] as number | null | undefined)
-                  const preds = SEGS.map(({ predKey }) => r[predKey] as number | null | undefined)
-                  const totalActual = actuals.every((v) => v != null) ? actuals.reduce<number>((s, v) => s + (v as number), 0) : null
-                  const totalPred = preds.every((v) => v != null) ? preds.reduce<number>((s, v) => s + (v as number), 0) : null
-                  return totalActual != null && totalPred != null ? totalActual - totalPred : null
-                })()
 
-                const colSpanTotal = colSpanBase + (viewMode === 'actual' ? 7 : viewMode === 'standard' ? 7 : 6)
+                const colSpanTotal = colSpanBase + 7
 
                 return (
                   <Fragment key={r.athlete_id}>
@@ -629,29 +591,13 @@ export default function RaceDetail() {
 
                       {viewMode === 'standard' && (
                         <>
-                          <td className="mono">{formatTime(r.swim_sec)}</td>
-                          <td className="mono">{formatTime(r.t1_sec)}</td>
-                          <td className="mono">{formatTime(r.bike_sec)}</td>
-                          <td className="mono">{formatTime(r.t2_sec)}</td>
-                          <td className="mono">{formatTime(r.run_sec)}</td>
+                          <td className="mono time-standard-total">{formatTime(r.standard_swim_sec)}</td>
+                          <td className="mono time-standard-total">{formatTime(r.standard_t1_sec)}</td>
+                          <td className="mono time-standard-total">{formatTime(r.standard_bike_sec)}</td>
+                          <td className="mono time-standard-total">{formatTime(r.standard_t2_sec)}</td>
+                          <td className="mono time-standard-total">{formatTime(r.standard_run_sec)}</td>
                           <td className="mono time-actual-muted">{formatTime(r.total_sec)}</td>
                           <td className="mono time-standard-total">{formatTime(r.standard_total_sec)}</td>
-                        </>
-                      )}
-
-                      {viewMode === 'gap' && (
-                        <>
-                          {SEGS.map(({ key, predKey, label }) => {
-                            const gap = getSegGap(r, key, predKey)
-                            return (
-                              <td key={label} className={gap == null ? 'mono' : gap < 0 ? 'mono diff-fast' : gap > 0 ? 'mono diff-slow' : 'mono'}>
-                                {formatDiff(gap)}
-                              </td>
-                            )
-                          })}
-                          <td className={totalGap == null ? 'mono time-actual-total' : totalGap < 0 ? 'mono diff-fast time-actual-total' : totalGap > 0 ? 'mono diff-slow time-actual-total' : 'mono time-actual-total'}>
-                            {formatDiff(totalGap)}
-                          </td>
                         </>
                       )}
                     </tr>
@@ -723,6 +669,8 @@ export default function RaceDetail() {
             </tbody>
           </table>
         </div>
+
+        <CumulativeSegChart results={results} />
 
         {difficulty_segments_als && (
           <details className="difficulty-details-toggle">

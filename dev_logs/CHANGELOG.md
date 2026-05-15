@@ -1,5 +1,30 @@
 # 開発履歴
 
+## 2026-05-15: レース結果UIの全面改善
+**コミット:** `(本PR)`
+**ブランチ:** claude/improve-race-results-ui-bJ5DW
+
+### 変更内容
+- `app/routers/races.py`: セグメント毎（Swim/T1/Bike/T2/Run）の標準化タイムを各 result に追加（`standard_{seg}_sec`）
+- `frontend/src/api.ts`: `RaceResult` 型に `standard_swim_sec` 等の5フィールドを追加
+- `frontend/src/pages/RaceDetail.tsx`: 累積セグメントグラフをページ最下部へ移動、グラフの水平スクロール対応、ViewMode から `gap` を削除し `showGap` トグルに変更、標準化タイムのセグメント毎表示に対応
+- `frontend/src/pages/pages.css`: チャートスクロールコンテナのスタイル追加、ギャップトグルのスタイル追加
+- `frontend/tsconfig.json`: 未使用の `baseUrl`/`paths` を削除し、TypeScript 5.x でのビルドを修正
+
+### 変更意図・背景
+- グラフが表の上にあると縦スクロールが多く使いにくかった → 表を最上部、グラフを最下部へ
+- 選手数が多い時にバーが細くなりラベルが被る問題 → 水平スクロール対応でバー幅を確保
+- 「予想とのギャップ」を常時表示していたが、デフォルト非表示（トグル）にしてシンプル化
+- 標準化タイムが合計のみで、どのセグメントで差が出たか分からなかった → セグメント毎に表示
+
+### 技術的決定事項
+- グラフは `ResponsiveContainer` を廃止し、選手数 × 72px の明示的幅に変更。スクロール外枠を `overflow-x: auto` で設定
+- `gap` モードを独立 ViewMode から `showGap` チェックボックスに統合。デフォルト false でシンプルなactualモードを維持
+- per-segment 標準化タイム = `actual_seg_sec - als_race_diffs[seg_sec]`。バックエンドで計算しフロントに渡す
+
+### 残課題・次のステップ
+- グラフのタッチスワイプによるチェックポイント切り替えは削除（横スクロールと干渉するため）。ナビボタンで操作
+
 ## 2026-05-15: CLAUDE.md にモバイル互換性ルールを追加
 **コミット:** `(本PR)`
 **ブランチ:** claude/add-mobile-compat-rules-mW7q

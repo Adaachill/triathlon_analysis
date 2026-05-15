@@ -530,6 +530,21 @@
   gap: 0.5rem;
 }
 
+.gap-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.gap-toggle-label input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
 .col-total-highlight {
   font-weight: 700;
   color: var(--text) !important;
@@ -950,12 +965,15 @@
   padding: 0.5rem 0;
   background: var(--bg-card);
   user-select: none;
-  touch-action: pan-y;
+}
+
+.cum-chart-scroll-outer {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .cum-chart-inner {
-  flex: 1;
-  min-width: 0;
   animation: cum-fade-slide 0.3s ease both;
 }
 
