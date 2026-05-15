@@ -10,11 +10,15 @@ import Admin from './pages/Admin'
 import Guide from './pages/Guide'
 import WorldRanking from './pages/WorldRanking'
 import WtImport from './pages/WtImport'
+import { warmupBackend } from './warmup'
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const navRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
+
+  // 起動直後にバックエンドを温める（Render スリープ復帰の30〜60秒を裏で消化）
+  useEffect(() => { warmupBackend() }, [])
 
   // Close drawer on navigation
   useEffect(() => { setMenuOpen(false) }, [location.pathname])

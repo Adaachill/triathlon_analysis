@@ -1,5 +1,40 @@
 # 開発履歴
 
+## 2026-05-15: ローディング体験の改善＆ホーム画面の情報量向上
+**コミット:** `(本PR)`
+**ブランチ:** claude/improve-loading-and-home-GBaHW
+
+### 変更内容
+- `app/main.py`: `/stats` エンドポイント追加（race_count / athlete_count / result_count / program_count / last_race_date を返す）
+- `frontend/src/components/Loading.tsx`: 3D回転トライアスロンスピナー（🏊🚴🏃が3D空間で120°ずつ配置されたカルーセル）、経過時間連動の進捗メッセージ（6/14/24/38秒で文言が切替）、`LoadingState` 共通コンポーネント、`TableSkeleton` / `CardListSkeleton` を追加
+- `frontend/src/components/Loading.css`: スピナーCSS（perspective + preserve-3d + rotateY アニメ）、スケルトンシマー、ローディングレイアウト
+- `frontend/src/warmup.ts`: アプリ起動時にバックエンドへ warm-up ping を投げるモジュール。module-scope の Promise で多重実行を防止、5分以内なら再 warm-up しない
+- `frontend/src/App.tsx`: 起動 useEffect に `warmupBackend()` を追加
+- `frontend/src/api.ts`: `getStats()` と `StatsResponse` 型を追加
+- `frontend/src/pages/Rankings.tsx` / `Races.tsx` / `AthleteDetail.tsx` / `RaceDetail.tsx`: `<div className="loading">読み込み中...</div>` を `<LoadingState />` + `<TableSkeleton />` に置換
+- `frontend/src/pages/Guide.tsx`: ホーム画面を大幅刷新。`StatsHero`（カウントアップ統計）、`RecentAndUpcoming`（直近4レース + 近日4大会）、`PersonaSection`（選手・コーチ・ファンの3視点別）、`FaqSection`（6項目FAQ）を追加。旧「クイックスタート」と「サーバー起動通知」は削除
+- `frontend/src/pages/Guide.css`: 新セクション用スタイル追加（ヒーロー拡張、ミニリスト、ペルソナカード）
+
+### 変更意図・背景
+Render Free プランでスリープからの復帰に30〜60秒かかるため、ランキング・レース一覧などバックエンド依存ページが初回アクセスで「読み込み中...」のまま固まり、ユーザー離脱の主要因となっていた。
+
+加えて、ホーム画面は静的テキスト中心で「いま生きているサービス」感が薄く、滞留時間が短かった。
+
+### 技術的決定事項
+- **warm-up は App.tsx ルートで一度だけ実行**: ユーザーがメニュー操作している裏側でサーバー復帰が進むため、Rankings をクリックする頃にはレスポンスが返り始める。fetch を空打ちするだけなのでサーバー負荷は最小
+- **3D スピナーは CSS のみで実装**: lottie や gif を入れるとバンドル増。`transform-style: preserve-3d` + `rotateY` で 5kB 以内
+- **進捗メッセージは段階的**: 「データを読み込み中… → サーバーを起動しています… → ALS最適化を計算中… → まだ準備中…」と切り替えて、ユーザーが「フリーズしている」と勘違いするのを防ぐ
+- **スケルトン → 実コンテンツ**: テーブル枠とシマーで「もうすぐ表示される」期待感を作る。骨格は本物の表とほぼ同じ高さで CLS（レイアウトシフト）を抑制
+- **prefers-reduced-motion 対応**: 回転を止めてフェードに切替
+- **`/stats` は SQL `func.count(func.distinct(...))` で軽量集計**: フルテーブルスキャンになるが Result 件数 < 数万なので OK。将来件数が増えたらキャッシュを検討
+- **CountUp は requestAnimationFrame + ease-out cubic**: setInterval よりスムーズで CPU 効率も良い
+
+### 残課題・次のステップ
+- 次PRで「伸び代カード＋レーダーチャート」を実装予定
+- その次のPRで「What-if シミュレータ」を実装予定
+- 手動アップロード（/admin）のメニュー整理はユーザー選択外のため次PR以降に持ち越し
+- バンドルが 670kB（recharts 込み）。code-split の余地あり
+
 ## 2026-05-15: ランキングのセグメント別ソート＆順位表示
 **コミット:** `(本PR)`
 **ブランチ:** claude/segment-ranking-leaderboard-zZMtg
