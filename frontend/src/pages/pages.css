@@ -1512,3 +1512,57 @@
   color: var(--accent);
   text-decoration: underline;
 }
+
+/* What-if シミュレータ折りたたみ（補助機能なので控えめに） */
+.whatif-details {
+  margin-top: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 12px);
+  overflow: hidden;
+}
+
+.whatif-summary-toggle {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.85rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: color 0.15s, background 0.15s;
+}
+
+.whatif-summary-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.whatif-summary-toggle::before {
+  content: '▶';
+  font-size: 0.7rem;
+  color: var(--accent);
+  transition: transform 0.2s;
+}
+
+.whatif-details[open] .whatif-summary-toggle::before {
+  transform: rotate(90deg);
+}
+
+.whatif-summary-toggle:hover {
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.whatif-details[open] .whatif-summary-toggle {
+  border-bottom: 1px solid var(--border);
+}
+
+/* 折りたたみ内では WhatIfSimulator の外側 margin を詰める */
+.whatif-details .whatif-card {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}

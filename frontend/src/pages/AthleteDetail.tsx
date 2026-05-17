@@ -390,9 +390,7 @@ export default function AthleteDetail() {
           )
         })()}
 
-        {/* What-if シミュレータ: スライダーで各セグメントを動かして予想順位を再計算 */}
-        <WhatIfSimulator athlete={data} rankings={categoryRankings} />
-        {/* 伸び代分析カード（同カテゴリTOPとの比較） */}
+        {/* 伸び代分析カード（同カテゴリTOPとの比較）— 最も価値が高いので先頭 */}
         <GrowthCards athlete={data} rankings={categoryRankings} />
 
         {/* セグメント別ポジショニング（レーダー） */}
@@ -556,6 +554,14 @@ export default function AthleteDetail() {
             </tbody>
           </table>
         </div>
+
+        {/* What-if シミュレータ: 補助的なので最下部に折りたたみで配置 */}
+        <details className="whatif-details">
+          <summary className="whatif-summary-toggle">
+            🧮 What-if シミュレータを開く（セグメント短縮時の予想順位を試算）
+          </summary>
+          <WhatIfSimulator athlete={data} rankings={categoryRankings} />
+        </details>
       </div>
     </div>
   )
