@@ -1,5 +1,54 @@
 # 開発履歴
 
+## 2026-05-15: モダンスマホUI（ボトムタブ・ダークモード・glassmorphism）
+**コミット:** `(本PR)`
+**ブランチ:** claude/modern-mobile-ui-Vx7q
+
+### 変更内容
+- `frontend/src/index.css`:
+  - ダークモード用 CSS 変数を `prefers-color-scheme: dark` メディアクエリと `:root[data-theme="dark"]` の両方で定義
+  - `--bg-glass` (半透明背景), `--accent-gradient`, `--shadow-md`, `--radius-sm/lg`, `--tab-bar-height`, `--safe-bottom` (iOS セーフエリア) を追加
+  - 角丸を `--radius: 12px → 14px` に拡大
+- `frontend/src/App.css`:
+  - ヘッダーに `position: sticky`, `backdrop-filter: saturate(180%) blur(14px)` を適用（iOS 風 glassmorphism）
+  - ロゴをグラデーション（`background-clip: text`）で表現
+  - ボトムタブバー（`.bottom-tabs`）を新規追加。固定 fixed・safe-area 対応・モバイル時のみ表示
+  - アクティブタブにグラデーション基調のインジケータバーを表示
+  - ハンバーガー幅を 36→44px に拡大（タッチターゲット最適化）
+  - モバイル時に main の padding-bottom をボトムタブ高さ分確保
+- `frontend/src/App.tsx`:
+  - テーマ管理ステート（`light` / `dark` / `system`）と localStorage 保存
+  - ヘッダー右側にテーマトグルボタン（☀️ / 🌙 / 🌓）追加
+  - ボトムタブバー JSX 追加（ホーム / ランキング / レース / 予想 の4つ）
+  - ハンバーガーメニューは「その他」（手動アップロード・WT大会インポート・世界ランク試算）への導線として残置
+- `frontend/index.html`:
+  - 保存テーマを React 起動前に `<html>` 属性に反映するインライン script（ちらつき防止）
+  - `<meta name="theme-color">` をライト/ダーク両対応で追加（iOS Safari のステータスバー色制御）
+  - viewport に `viewport-fit=cover` を追加（iOS セーフエリア有効化）
+
+### 変更意図・背景
+従来のスマホUIは「ハンバーガー1本に全項目押し込み」型で、現代的なネイティブアプリ体験から離れていた。離脱率の高い初見スマホユーザーに「使いやすい・モダンなツール」と感じてもらうため：
+
+1. **ボトムタブバー**: スマホで最も多用される4機能（ホーム/ランキング/レース/予想）を画面下部固定の親指届きやすい位置に配置
+2. **ダークモード**: 夜間・暗所での閲覧体験向上 + 「設定がきめ細かい」シグナル
+3. **Glassmorphism ヘッダー**: iOS 風の半透明＋blur で奥行きとモダンさを演出
+4. **タッチターゲット最適化**: 44px 最小ヒット領域で WCAG/HIG 準拠
+
+### 技術的決定事項
+- **テーマ切替の3状態 (light / dark / system)**: 「システムに従う」を含めることで「私の設定を尊重してほしい」ユーザーニーズを満たす
+- **ちらつき防止インライン script**: `<head>` 内で localStorage を読んで `<html data-theme>` を設定。React 描画前に色が確定するため、ライトモード固定で起動 → ダーク切替で一瞬白フラッシュ、を回避
+- **CSS-only ボトムタブ**: アクティブインジケータも `.bottom-tab.active::before` で疑似要素のみ。JS不要・軽量
+- **safe-area-inset-bottom**: iPhone のホームインジケータ領域にタブが隠れないよう `env(safe-area-inset-bottom)` を padding に加算
+- **モバイル分岐ブレークポイント**: 700px → 768px に変更。タブレット縦持ち（iPad mini など）も含めてモバイルナビを表示
+- **ハンバーガー併存**: ボトムタブで主要4機能、ハンバーガーで「その他」（データ取得・世界ランク試算）に分離。完全に削除しない理由は将来ナビ項目が増えた時の拡張性
+- **`backdrop-filter` の Safari 互換**: `-webkit-backdrop-filter` も併記して iOS 14 以降に対応
+- **3000px超のテキストフィット**: ロゴのグラデは `background-clip: text` を使用。`-webkit-` プレフィックスも併記
+
+### 残課題・次のステップ
+- ダークモードの細部（Recharts チャートの軸線色など）は CSS 変数経由で自動切替されない箇所が残る可能性。実機確認で調整必要
+- ボトムタブの選択中アニメーションを Spring 系にしたい場合は framer-motion 導入を検討
+- iOS の「下からスワイプアップでホームに戻る」ジェスチャー領域とボトムタブが干渉する可能性。実機確認推奨
+
 ## 2026-05-15: AthleteDetail Tooltip の `curso` タイポ修正（ビルドエラー解消）
 **コミット:** `(本PR)`
 **ブランチ:** claude/fix-tooltip-props-9xe3I

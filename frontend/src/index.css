@@ -1,18 +1,67 @@
-/* Triathlon Analysis - ライト系・白ベース＋青テーマ */
+/* Triathlon Analysis - ライト/ダーク両対応 */
 :root {
+  /* Light mode (default) */
   --bg: #f4f7fb;
   --bg-card: #ffffff;
   --bg-hover: #eaf0f8;
+  --bg-glass: rgba(255, 255, 255, 0.72);
   --text: #111827;
   --text-muted: #6b7280;
   --accent: #1e6bba;
   --accent-dim: #1557a0;
   --accent-glow: rgba(30, 107, 186, 0.15);
+  --accent-gradient: linear-gradient(135deg, #2380d8 0%, #1e6bba 60%, #1557a0 100%);
   --danger: #dc2626;
   --success: #16a34a;
   --border: #dde3ea;
-  --radius: 12px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 16px rgba(30, 107, 186, 0.10);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 20px;
+  --tab-bar-height: 64px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
   --font-sans: 'DM Sans', 'Noto Sans JP', -apple-system, sans-serif;
+}
+
+/* Dark mode (system preference) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1220;
+    --bg-card: #131b2d;
+    --bg-hover: #1c2740;
+    --bg-glass: rgba(19, 27, 45, 0.78);
+    --text: #e8eef8;
+    --text-muted: #9aa3b5;
+    --accent: #4e9af5;
+    --accent-dim: #6aaeff;
+    --accent-glow: rgba(78, 154, 245, 0.20);
+    --accent-gradient: linear-gradient(135deg, #6aaeff 0%, #4e9af5 60%, #2d7be0 100%);
+    --danger: #f87171;
+    --success: #4ade80;
+    --border: #283248;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* Manual override (data-theme on <html>) */
+:root[data-theme="dark"] {
+  --bg: #0b1220;
+  --bg-card: #131b2d;
+  --bg-hover: #1c2740;
+  --bg-glass: rgba(19, 27, 45, 0.78);
+  --text: #e8eef8;
+  --text-muted: #9aa3b5;
+  --accent: #4e9af5;
+  --accent-dim: #6aaeff;
+  --accent-glow: rgba(78, 154, 245, 0.20);
+  --accent-gradient: linear-gradient(135deg, #6aaeff 0%, #4e9af5 60%, #2d7be0 100%);
+  --danger: #f87171;
+  --success: #4ade80;
+  --border: #283248;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 * {
@@ -26,6 +75,8 @@ body {
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 #root {
@@ -51,11 +102,12 @@ button {
 select {
   font-family: inherit;
   padding: 0.5rem 1rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--bg-card);
   color: var(--text);
   font-size: 0.95rem;
+  min-height: 36px;
 }
 
 select:focus {
